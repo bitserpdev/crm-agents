@@ -1,0 +1,31 @@
+            # Store in Operational DB (structured)
+            cur.execute("""
+                INSERT INTO crm.crm_campaign_responses
+                    (response_id, run_id, contact_id,
+                     reply_body, intent_score, intent_label,
+                     responded_at)
+                VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, %s::timestamptz)
+                ON CONFLICT DO NOTHING
+                RETURNING response_id
+            """, (
+                run_id, contact_id,
+                reply_body[:5000],
+                intent.get("intent_score", 0.3),
+                intent.get("intent_label", "cold"),
+                received_at,
+            ))
+            inserted = cur.fetchone()
+
+            # ── AGENT 4 TRIGGER ──────────────────────────────────────────
+            # Push to Redis reply queue so Agent 4 processes immediately
+            if inserted:
+                import redis as redis_lib
+                r = redis_lib.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
+                r.rpush("op:reply_queue", json.dumps({
+                    "response_id": str(inserted["response_id"]),
+                    "contact_id":  contact_id,
+                    "campaign_id": campaign_id,
+                    "run_id":      run_id,
+                }))
+                print(f"[agent3/monitor] → Pushed to agent4 reply queue")
+            # ─────────────────────────────────────────────────────────────

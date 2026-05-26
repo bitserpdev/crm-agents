@@ -1,0 +1,13 @@
+def run_agent4_worker():
+    """Process all pending replies in the queue."""
+    from agent4.graph import run_agent4
+    import redis
+    r = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
+    count = 0
+    while r.llen("op:reply_queue") > 0:
+        result = run_agent4()
+        if result.get("run_status") == "skipped":
+            break
+        count += 1
+    if count:
+        print(f"[scheduler] Agent 4 processed {count} replies")
