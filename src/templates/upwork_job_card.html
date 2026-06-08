@@ -1,0 +1,27 @@
+<div class="job-card">
+    <div class="job-title">
+        <a href="{{JOB_URL}}" target="_blank">{{JOB_TITLE}}</a>
+    </div>
+
+    <div class="job-meta">
+        <span class="meta-tag budget-tag">💰 {{BUDGET}}</span>
+        <span class="meta-tag campaign-tag">📋 {{CAMPAIGN_NAME}}</span>
+        {{#EXPERIENCE_LEVEL}}
+        <span class="meta-tag">⭐ {{EXPERIENCE_LEVEL}}</span>
+        {{/EXPERIENCE_LEVEL}}
+    </div>
+
+    {{#SKILLS}}
+    <div class="skills">
+        {{SKILLS_HTML}}
+    </div>
+    {{/SKILLS}}
+
+    <div class="description">
+        {{DESCRIPTION}}...
+    </div>
+
+    <a href="{{JOB_URL}}" class="button" style="background-color: #3b82f6; padding: 6px 14px; font-size: 12px;">
+        View on Upwork →
+    </a>
+</div>

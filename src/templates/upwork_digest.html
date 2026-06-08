@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upwork Job Digest</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #1e293b;
+            background-color: #f1f5f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .email-wrapper {
+            background-color: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            padding: 32px 24px;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-top: 8px;
+        }
+
+        .date-badge {
+            background: rgba(255, 255, 255, 0.2);
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 12px;
+        }
+
+        /* Stats */
+        .stats {
+            background-color: #f8fafc;
+            padding: 20px 24px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: center;
+        }
+
+        .stats-number {
+            font-size: 42px;
+            font-weight: 800;
+            color: #4f46e5;
+        }
+
+        .stats-label {
+            font-size: 14px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        /* Job Card */
+        .job-card {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 24px;
+            transition: background-color 0.2s ease;
+        }
+
+        .job-card:hover {
+            background-color: #faf5ff;
+        }
+
+        .job-title {
+            margin-bottom: 12px;
+        }
+
+        .job-title a {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e293b;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .job-title a:hover {
+            color: #4f46e5;
+            text-decoration: underline;
+        }
+
+        /* Meta tags */
+        .job-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .meta-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background-color: #f1f5f9;
+            color: #475569;
+        }
+
+        .budget-tag {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+
+        .campaign-tag {
+            background-color: #ede9fe;
+            color: #5b21b6;
+        }
+
+        /* Skills */
+        .skills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .skill {
+            font-size: 11px;
+            padding: 4px 10px;
+            background-color: #e2e8f0;
+            color: #334155;
+            border-radius: 16px;
+        }
+
+        /* Description */
+        .description {
+            font-size: 13px;
+            color: #475569;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        /* Footer */
+        .footer {
+            background-color: #f8fafc;
+            padding: 24px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .footer p {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+
+        .footer a {
+            color: #4f46e5;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .button {
+            display: inline-block;
+            background-color: #4f46e5;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            margin-top: 16px;
+            transition: background-color 0.2s;
+        }
+
+        .button:hover {
+            background-color: #4338ca;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #e2e8f0;
+            margin: 0;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 10px;
+            }
+
+            .job-card {
+                padding: 16px;
+            }
+
+            .job-meta {
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header -->
+            <div class="header">
+                <h1>🎯 Upwork Job Digest</h1>
+                <p>Your daily dose of freelance opportunities</p>
+                <div class="date-badge">{{DATE}}</div>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats">
+                <div class="stats-number">{{TOTAL_JOBS}}</div>
+                <div class="stats-label">New jobs matching your filters</div>
+            </div>
+
+            <!-- Jobs List -->
+            {{JOBS_LIST}}
+
+            <!-- Footer -->
+            <div class="footer">
+                <p>
+                    This is an automated digest from <strong>BITS CRM Agent</strong>.<br>
+                    Jobs are fetched based on your Upwork campaign filters.
+                </p>
+                <p>
+                    <a href="{{MANAGE_URL}}">Manage your campaigns</a> |
+                    <a href="{{UNSUBSCRIBE_URL}}">Unsubscribe</a>
+                </p>
+                <hr style="margin: 16px 0;">
+                <p style="font-size: 11px;">
+                    © {{YEAR}} BITS Global Consulting. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

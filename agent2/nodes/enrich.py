@@ -5,12 +5,14 @@ import psycopg2
 import psycopg2.extras
 from agent2.state import Agent2State
 
-r            = redis.from_url(os.getenv("REDIS_URL"))
+r = redis.from_url(os.getenv("REDIS_URL"))
 PROMOTED_SET = "op:promoted_events"
-DEDUP_TTL    = 3600  # 1 hour
+DEDUP_TTL = 3600  # 1 hour
+
 
 def get_conn():
     return psycopg2.connect(os.getenv("DATABASE_URL"))
+
 
 def _upsert_company(cur, record: dict) -> str | None:
     company_name = (record.get("company_name") or "").strip()  # FIX: handles None value
@@ -18,18 +20,23 @@ def _upsert_company(cur, record: dict) -> str | None:
         return None
 
     # Check if company exists by name
-    cur.execute("""
+    cur.execute(
+        """
         SELECT company_id FROM crm.crm_companies
         WHERE LOWER(company_name) = LOWER(%s)
         LIMIT 1
-    """, (company_name,))
+    """,
+        (company_name,),
+    )
     row = cur.fetchone()
+
     if row:
         return str(row["company_id"])
 
     # Insert new company
     company_id = str(uuid.uuid4())
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO crm.crm_companies
             (company_id, company_name, domain, city, country)
         VALUES (%s, %s, %s, %s, %s)
@@ -37,15 +44,18 @@ def _upsert_company(cur, record: dict) -> str | None:
             company_name = EXCLUDED.company_name,
             updated_at   = NOW()
         RETURNING company_id
-    """, (
-        company_id,
-        company_name,
-        record.get("company_domain") or None,
-        record.get("city") or None,
-        record.get("country_code") or None,
-    ))
+    """,
+        (
+            company_id,
+            company_name,
+            record.get("company_domain") or None,
+            record.get("city") or None,
+            record.get("country_code") or None,
+        ),
+    )
     result = cur.fetchone()
     return str(result["company_id"]) if result else company_id
+
 
 def enrich_node(state: Agent2State) -> Agent2State:
     if not state["extracted_records"]:
@@ -54,15 +64,20 @@ def enrich_node(state: Agent2State) -> Agent2State:
 
     enriched = []
     conn = get_conn()
-    cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     for record in state["extracted_records"]:
-        event_id  = (record.get("_event_id") or "")
-        dedup_key = (record.get("_dedup_key") or "")
+        event_id = record.get("_event_id") or ""
+        dedup_key = record.get("_dedup_key") or ""
 
         # Skip empty records
-        if not record.get("first_name","").strip() and not record.get("job_title","").strip():
-            print(f"[agent2/enrich] Skipping empty record: {record.get("_event_id","")[:16]}")
+        if (
+            not record.get("first_name", "").strip()
+            and not record.get("job_title", "").strip()
+        ):
+            print(
+                f"[agent2/enrich] Skipping empty record: {record.get("_event_id","")[:16]}"
+            )
             continue
         # Skip if already promoted (Redis set check)
         if r.sismember(PROMOTED_SET, event_id):
@@ -81,13 +96,18 @@ def enrich_node(state: Agent2State) -> Agent2State:
             conn.commit()
         except Exception as e:
             conn.rollback()
-            print(f"[agent2/enrich] Company upsert failed for event {event_id[:16]}: {e}")
+            print(
+                f"[agent2/enrich] Company upsert failed for event {event_id[:16]}: {e}"
+            )
             company_id = None
 
         record["_company_id"] = company_id
         enriched.append(record)
 
-    cur.close(); conn.close()
-    print(f"[agent2/enrich] {len(enriched)}/{len(state['extracted_records'])} records after dedup")
+    cur.close()
+    conn.close()
+    print(
+        f"[agent2/enrich] {len(enriched)}/{len(state['extracted_records'])} records after dedup"
+    )
     state["enriched_records"] = enriched
     return state

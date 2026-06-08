@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from api.routers import campaigns, connectors, runs, data, crm, agent3, email_campaigns, agent4
+from api.routers import campaigns, connectors, runs, data, crm, agent3, email_campaigns, agent4, agent5, agent6
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,6 +43,8 @@ app.include_router(agent4.router)
 app.include_router(crm.router,       prefix="/api/crm",       tags=["CRM"])
 app.include_router(data.router,       prefix="/api/data",       tags=["Data"])
 app.include_router(email_campaigns.router, prefix="/api/email-campaigns", tags=["Email Campaigns"])
+app.include_router(agent5.router, tags=["Agent5"])
+app.include_router(agent6.router, tags=["Agent6"])
 
 @app.get("/health")
 def health():

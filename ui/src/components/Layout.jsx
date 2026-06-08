@@ -1,17 +1,21 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Radio, PlayCircle, Database, Mail,
-         Users, TrendingUp, Wifi, WifiOff, MessageSquare, Clock } from "lucide-react";
+import {
+  LayoutDashboard, Radio, PlayCircle, Database, Mail,
+  Users, TrendingUp, Wifi, WifiOff, MessageSquare, Clock
+} from "lucide-react";
 
 const links = [
-  { to: "/",            label: "Campaigns",    icon: LayoutDashboard, group: "Agent 1" },
-  { to: "/connections", label: "Connections",  icon: Radio,           group: "Agent 1" },
-  { to: "/runs",        label: "Run History",  icon: PlayCircle,      group: "Agent 1" },
-  { to: "/data",        label: "Raw Data",     icon: Database,        group: "Agent 1" },
-  { to: "/contacts",    label: "Contacts",     icon: Users,           group: "Agent 2" },
-  { to: "/leads",          label: "Leads",         icon: TrendingUp, group: "Agent 2" },
-  { to: "/email-campaigns",label: "Email Campaigns",icon: Mail,       group: "Agent 3" },
-  { to: "/conversations",  label: "Conversations",  icon: MessageSquare, group: "Agent 4" },
-  { to: "/followups",      label: "Follow-ups",     icon: Clock,         group: "Agent 4" },
+  { to: "/", label: "Campaigns", icon: LayoutDashboard, group: "Agent 1" },
+  { to: "/connections", label: "Connections", icon: Radio, group: "Agent 1" },
+  { to: "/runs", label: "Run History", icon: PlayCircle, group: "Agent 1" },
+  { to: "/data", label: "Raw Data", icon: Database, group: "Agent 1" },
+  { to: "/contacts", label: "Contacts", icon: Users, group: "Agent 2" },
+  { to: "/leads", label: "Leads", icon: TrendingUp, group: "Agent 2" },
+  { to: "/email-campaigns", label: "Email Campaigns", icon: Mail, group: "Agent 3" },
+  { to: "/conversations", label: "Conversations", icon: MessageSquare, group: "Agent 4" },
+  { to: "/followups", label: "Follow-ups", icon: Clock, group: "Agent 4" },
+  { to: "/upwork-jobs", label: "Upwork Jobs", icon: Radio, group: "Agent 5" },
+  { to: "/daily-digest", label: "Daily Digest", icon: Radio, group: "Agent 5" },
 ];
 
 export default function Layout({ children, health }) {
@@ -35,8 +39,8 @@ export default function Layout({ children, health }) {
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all
                        ${isActive ? "bg-indigo-600 text-white font-medium"
-                                  : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}>
-                    <Icon size={15}/>{label}
+                        : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}>
+                    <Icon size={15} />{label}
                   </NavLink>
                 ))}
               </div>
@@ -46,7 +50,7 @@ export default function Layout({ children, health }) {
         <div className="p-4 border-t border-gray-800">
           <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg
             ${health === "healthy" ? "bg-green-900/30 text-green-400" : "bg-red-900/30 text-red-400"}`}>
-            {health === "healthy" ? <Wifi size={12}/> : <WifiOff size={12}/>}
+            {health === "healthy" ? <Wifi size={12} /> : <WifiOff size={12} />}
             {health === "healthy" ? "All systems healthy" : "Service degraded"}
           </div>
         </div>

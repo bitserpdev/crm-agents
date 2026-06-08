@@ -1,127 +1,214 @@
 import { useEffect, useState } from "react";
-import { Mail, Plus, Play, Eye, X, CheckCircle,
-         XCircle, Clock, TrendingUp, MessageSquare,
-         ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { Mail, Plus, RefreshCw, XCircle, CheckCircle } from "lucide-react";
 import axios from "axios";
 
-const API = axios.create({ baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000" });
+// Components
+import CampaignCard from "../components/EmailCampaign/EmailCampaignCard";
+import CreateCampaignModal from "../components/EmailCampaign/CreateEmailCampaignModal";
+import EditCampaignModal from "../components/EmailCampaign/EditEmailCampaignModal";
+import PreviewContactsModal from "../components/EmailCampaign/PreviewEmailContactsModal";
+import CustomizeEmailModal from "../components/EmailCampaign/CustomizeEmailCampaignModal";
+import PreviewEmailModal from "../components/EmailCampaign/PreviewEmailCampaignModal";
+import CampaignDetailModal from "../components/EmailCampaign/EmailCampaignDetailModal";
+import Modal from "../components/shared/Modal";
+
+const API = axios.create({ baseURL: import.meta.env.VITE_API_URL, withCredentials: true });
 API.defaults.timeout = 120000;
-const getCampaigns   = ()   => API.get("/api/agent3/campaigns");
-const createCampaign = (d)  => API.post("/api/agent3/campaigns", d);
-const triggerCampaign= (id) => API.post(`/api/agent3/campaigns/${id}/trigger`);
-const getRuns        = (id) => API.get(`/api/agent3/campaigns/${id}/runs`);
-const getRecipients  = (id) => API.get(`/api/agent3/runs/${id}/recipients`);
-const getReplies     = (id) => API.get(`/api/agent3/replies?campaign_id=${id}`);
-const startPreview   = (id) => API.post(`/api/agent3/campaigns/${id}/preview/start`, {}, { timeout: 10000 });
-const updateCampaign = (id, d) => API.put(`/api/agent3/campaigns/${id}`, d);
-const deleteCampaign = (id) => API.delete(`/api/agent3/campaigns/${id}`);
-const pollPreview  = (jobId) => API.get(`/api/agent3/preview/job/${jobId}`, { timeout: 10000 });
 
-const STAGES = ["subscriber","lead","mql","sql","opportunity","customer"];
-const SIZES   = ["1-10","11-50","51-200","201-500","500+"];
-const INTENT  = {
-  hot:         "bg-green-900/50 text-green-300",
-  warm:        "bg-yellow-900/50 text-yellow-300",
-  cold:        "bg-gray-800 text-gray-400",
-  unsubscribe: "bg-red-900/50 text-red-300",
-};
+const getCampaigns = () => API.get("/api/campaigns/emails");
+const createCampaign = (d) => API.post("/api/campaigns/emails", d);
+const updateCampaign = (id, d) => API.put(`/api/campaigns/emails/${id}`, d);
+const deleteCampaign = (id) => API.delete(`/api/campaigns/emails/${id}`);
+const triggerCampaign = (id, sel) => API.post(`/api/campaigns/${id}/trigger`, { selected_contacts: sel });
+const previewContacts = (id, filters) => API.post(`/api/campaigns/${id}/preview-contacts`, filters);
+const startPreview = (id, cid) => API.post(`/api/campaigns/emails/${id}/preview/start`, { contact_id: cid }, { timeout: 10000 });
+const pollPreview = (jobId) => API.get(`/api/campaigns/emails/preview/job/${jobId}`, { timeout: 10000 });
+const sendCustomized = (data) => API.post("/api/campaigns/emails/send-customized", data);
+const getRuns = (id) => API.get(`/api/campaigns/runs/campaign/${id}`);
+const getRecipients = (runId) => API.get(`/api/campaigns/emails/runs/${runId}/recipients`);
+const getReplies = (id) => API.get(`/api/campaigns/emails/replies`, { params: { campaign_id: id } });
 
-function Modal({ title, onClose, children, wide=false }) {
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className={`bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl
-        ${wide ? "w-full max-w-3xl" : "w-full max-w-xl"} max-h-[90vh] overflow-auto`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
-          <h3 className="font-semibold text-white">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18}/></button>
-        </div>
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, hint, children }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>
-      {children}
-      {hint && <p className="text-xs text-gray-600 mt-1">{hint}</p>}
-    </div>
-  );
-}
-
-function Input({ value, onChange, placeholder, type="text" }) {
-  return (
-    <input type={type} value={value} onChange={e=>onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"/>
-  );
-}
-
-function Select({ value, onChange, options, placeholder }) {
-  return (
-    <select value={value} onChange={e=>onChange(e.target.value)}
-      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
-      <option value="">{placeholder || "Any"}</option>
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
-  );
-}
-
-const EMPTY_FORM = {
-  campaign_name:"", service_description:"", from_address:"",
-  filter_region:"", filter_industry:"", filter_company_size:"",
-  filter_min_score:0, filter_max_score:100,
-  filter_stage:"", scheduled_at:"",
-};
 
 export default function EmailCampaigns() {
   const [campaigns, setCampaigns] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm]     = useState(EMPTY_FORM);
-  const [detail, setDetail] = useState(null);   // {campaign, runs, recipients, replies}
-  const [preview, setPreview]= useState(null);
+  const [detail, setDetail] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
-  const [editForm, setEditForm] = useState({});
-  const [msg, setMsg]       = useState({text:"",type:"ok"});
-  const [running, setRunning]= useState({});
-  const [loading, setLoading]= useState(false);
-  const [tab, setTab]       = useState("recipients");
+  const [msg, setMsg] = useState({ text: "", type: "ok" });
+  const [running, setRunning] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  const [customizeLoading, setCustomizeLoading] = useState(
+    false);
+  const [customizeError, setCustomizeError] = useState(null);
+
+  const [savedContactIds, setSavedContactIds] = useState([]);
+
+  const [sending, setSending] = useState(false);
+
+
+  // Modal states
+  const [previewContactsModal, setPreviewContactsModal] = useState(null);
+  const [filteredContacts, setFilteredContacts] = useState([]);
+  const [customizeModal, setCustomizeModal] = useState(null);
+  const [emailTemplate, setEmailTemplate] = useState(null);
+  const [currentCampaign, setCurrentCampaign] = useState(null);
 
   const load = () => {
     setLoading(true);
-    getCampaigns().then(r => setCampaigns(r.data)).finally(()=>setLoading(false));
+    getCampaigns().then(r => setCampaigns(r.data)).finally(() => setLoading(false));
   };
-  useEffect(()=>{ load(); },[]);
+  useEffect(() => { load(); }, []);
 
-  const flash = (text,type="ok") => { setMsg({text,type}); setTimeout(()=>setMsg({text:"",type:"ok"}),3000); };
+  const flash = (text, type = "ok") => { setMsg({ text, type }); setTimeout(() => setMsg({ text: "", type: "ok" }), 3000); };
 
-  const submit = async () => {
-    if (!form.campaign_name || !form.service_description || !form.from_address) {
-      flash("Name, service description and from address are required","err"); return;
-    }
+  const handleCreateCampaign = async (data) => {
     try {
-      await createCampaign({
-        ...form,
-        filter_min_score: Number(form.filter_min_score),
-        filter_max_score: Number(form.filter_max_score),
-        scheduled_at: form.scheduled_at || null,
-      });
-      flash("Campaign created!"); setShowCreate(false); setForm(EMPTY_FORM); load();
-    } catch(e) { flash("Error: "+e.message,"err"); }
+      await createCampaign(data);
+      flash("Campaign created!");
+      load();
+    } catch (e) { flash("Error: " + e.message, "err"); }
   };
 
-  const trigger = async (id, name) => {
-    setRunning(r=>({...r,[id]:true}));
+  const handleUpdateCampaign = async (id, data) => {
     try {
-      await triggerCampaign(id);
+      await updateCampaign(id, data);
+      flash("Campaign updated!");
+      setEditTarget(null);
+      load();
+    } catch (e) { flash("Error: " + e.message, "err"); }
+  };
+
+  const handleDeleteCampaign = async (id, name) => {
+    if (!window.confirm(`Delete campaign "${name}"?`)) return;
+    try {
+      await deleteCampaign(id);
+      flash("Campaign deleted!");
+      load();
+    } catch (e) { flash("Error: " + e.message, "err"); }
+  };
+
+  const handleTrigger = async (id, name, selectedContacts = null) => {
+    setRunning(r => ({ ...r, [id]: true }));
+    try {
+      await triggerCampaign(id, selectedContacts);
       flash(`Campaign "${name}" triggered — emails sending...`);
-    } catch(e) { flash("Trigger failed","err"); }
-    setTimeout(()=>setRunning(r=>({...r,[id]:false})),5000);
+    } catch (e) { flash("Trigger failed", "err"); }
+    setTimeout(() => setRunning(r => ({ ...r, [id]: false })), 5000);
   };
 
-  const openDetail = async (campaign) => {
+  const handlePreviewContacts = async (campaign) => {
+    setCurrentCampaign(campaign);
+    setPreviewContactsModal("loading");
+    try {
+      const response = await previewContacts(campaign.campaign_id, {
+        filter_region: campaign.filter_region,
+        filter_industry: campaign.filter_industry,
+        filter_company_size: campaign.filter_company_size,
+        filter_min_score: campaign.filter_min_score,
+        filter_max_score: campaign.filter_max_score,
+        filter_stage: campaign.filter_stage,
+      });
+      const contacts = response.data?.contacts || [];
+      setFilteredContacts(contacts);
+      setPreviewContactsModal("preview");
+    } catch (e) {
+      setPreviewContactsModal({ error: "Failed to load contacts" });
+    }
+  };
+
+  const handleSendToSelected = async (selectedIds) => {
+    await handleTrigger(currentCampaign.campaign_id, currentCampaign.campaign_name, selectedIds);
+    setPreviewContactsModal(null);
+  };
+
+  const handleCustomize = async (campaign, contact = null) => {
+
+    setCustomizeLoading(true);
+    setCustomizeError(null);
+    setCurrentCampaign(campaign);
+
+    try {
+      const response = await startPreview(campaign.campaign_id, null);
+
+      const { job_id } = response.data;
+
+      let pollCount = 0;
+      const MAX_POLLS = 30;
+
+      const poll = async () => {
+        pollCount++;
+        try {
+          const { data } = await pollPreview(job_id);
+          if (data.status === "pending") {
+            setTimeout(poll, 2000);
+          } else if (data.status === "done") {
+            setCustomizeLoading(false)
+            setEmailTemplate({
+              subject: data.email?.subject || "",
+              body: data.email?.text || data.email?.html || "",
+              contact: data.contact,
+              job_id: job_id
+            });
+            setCustomizeModal("edit");
+          } else {
+            setCustomizeModal({ error: data.error || "Failed to generate preview" });
+          }
+        } catch (e) {
+          console.error("Polling error:", e);
+          if (pollCount < MAX_POLLS) {
+            setTimeout(poll, 2000);
+          } else {
+            setCustomizeError("Polling failed. Please try again.");
+            setCustomizeLoading(false);
+          }
+        }
+      };
+      setTimeout(poll, 2000);
+    } catch (err) {
+      console.error("Customize error:", err);
+      setCustomizeError(err.response?.data?.detail || "Failed to generate email preview");
+      setCustomizeLoading(false);
+    }
+  };
+
+  const handleSaveCustomized = async (template) => {
+    console.log("Save & Send clicked with template:", template);
+
+    if (savedContactIds.length === 0) {
+      flash("No contacts selected", "err");
+      return;
+    }
+
+    setSending(true);
+
+    try {
+      // Call API to send emails to all saved contacts
+      const response = await sendCustomizedEmail({
+        campaign_id: currentCampaign.campaign_id,
+        contact_ids: savedContactIds,
+        subject: template.subject,
+        body: template.body,
+        html_body: template.htmlBody || template.body.replace(/\n/g, '<br>')
+      });
+
+      console.log("Send response:", response);
+      flash(`Email sent to ${response.data?.sent || savedContactIds.length} contacts!`, "ok");
+
+      // Close modal and reset
+      setCustomizeModal(null);
+      setEmailTemplate(null);
+
+    } catch (error) {
+      console.error("Send failed:", error);
+      flash("Failed to send emails: " + (error.response?.data?.detail || error.message), "err");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleOpenDetail = async (campaign) => {
     const [runs, replies] = await Promise.all([
       getRuns(campaign.campaign_id),
       getReplies(campaign.campaign_id),
@@ -132,38 +219,9 @@ export default function EmailCampaigns() {
       recipients = r.data;
     }
     setDetail({ campaign, runs: runs.data, recipients, replies: replies.data });
-    setTab("recipients");
   };
 
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete campaign "${name}"?`)) return;
-    await deleteCampaign(id);
-    setCampaigns(cs => cs.filter(c => c.campaign_id !== id));
-  };
-
-  const openEdit = (c) => {
-    setEditTarget(c.campaign_id);
-    setEditForm({
-      campaign_name: c.campaign_name,
-      service_description: c.service_description,
-      from_address: c.from_address,
-      filter_region: c.filter_region || "",
-      filter_industry: c.filter_industry || "",
-      filter_company_size: c.filter_company_size || "",
-      filter_min_score: c.filter_min_score ?? 0,
-      filter_max_score: c.filter_max_score ?? 100,
-      filter_stage: c.filter_stage || "",
-    });
-  };
-
-  const saveEdit = async () => {
-    await updateCampaign(editTarget, editForm);
-    setEditTarget(null);
-    const { data } = await getCampaigns();
-    setCampaigns(data);
-  };
-
-  const loadPreview = async (id) => {
+  const handleLoadPreview = async (id) => {
     setPreview("loading");
     try {
       const { data: { job_id } } = await startPreview(id);
@@ -187,6 +245,13 @@ export default function EmailCampaigns() {
     }
   };
 
+  const handleSaveSelection = (selectedIds) => {
+    setSavedContactIds(selectedIds);
+    console.log("Saved contacts:", selectedIds);
+    flash(`${selectedIds.length} contacts saved for email campaign`, "ok");
+    setPreviewContactsModal(null);  // Close modal after save
+  };
+
   const connectOutlook = (id) => {
     window.location.href = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/agent3/auth/${id}/start`;
   };
@@ -197,7 +262,7 @@ export default function EmailCampaigns() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Mail size={22} className="text-indigo-400"/> Email Campaigns
+            <Mail size={22} className="text-indigo-400" /> Email Campaigns
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
             AI-personalized outreach · powered by llama3.2 · sent via Microsoft 365
@@ -205,20 +270,21 @@ export default function EmailCampaigns() {
         </div>
         <div className="flex gap-2">
           <button onClick={load} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg text-sm transition-colors">
-            <RefreshCw size={14}/>
+            <RefreshCw size={14} />
           </button>
-          <button onClick={()=>setShowCreate(true)}
+          <button onClick={() => setShowCreate(true)}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-            <Plus size={16}/> New Campaign
+            <Plus size={16} /> New Campaign
           </button>
         </div>
       </div>
 
+      {/* Flash message */}
       {msg.text && (
         <div className={`mb-4 px-4 py-2.5 rounded-lg text-sm flex items-center gap-2
-          ${msg.type==="err" ? "bg-red-900/40 border border-red-700 text-red-300"
-                             : "bg-green-900/40 border border-green-700 text-green-300"}`}>
-          {msg.type==="err" ? <XCircle size={14}/> : <CheckCircle size={14}/>}
+          ${msg.type === "err" ? "bg-red-900/40 border border-red-700 text-red-300"
+            : "bg-green-900/40 border border-green-700 text-green-300"}`}>
+          {msg.type === "err" ? <XCircle size={14} /> : <CheckCircle size={14} />}
           {msg.text}
         </div>
       )}
@@ -228,283 +294,131 @@ export default function EmailCampaigns() {
         <div className="text-center text-gray-600 py-12 text-sm">Loading campaigns...</div>
       ) : campaigns.length === 0 ? (
         <div className="text-center py-16">
-          <Mail size={40} className="text-gray-700 mx-auto mb-3"/>
+          <Mail size={40} className="text-gray-700 mx-auto mb-3" />
           <p className="text-gray-500">No email campaigns yet.</p>
-          <button onClick={()=>setShowCreate(true)} className="mt-3 text-indigo-400 text-sm hover:underline">
+          <button onClick={() => setShowCreate(true)} className="mt-3 text-indigo-400 text-sm hover:underline">
             Create your first campaign
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {campaigns.map(c => (
-            <div key={c.campaign_id}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors">
-              {/* Card header */}
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold text-white">{c.campaign_name}</h3>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate max-w-56">
-                    {c.service_description}
-                  </p>
-                </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-                  ${c.campaign_status==="running" ? "bg-green-900/50 text-green-300"
-                  : c.campaign_status==="completed" ? "bg-blue-900/50 text-blue-300"
-                  : "bg-gray-800 text-gray-400"}`}>
-                  {c.campaign_status}
-                </span>
-              </div>
-
-              {/* Stats row */}
-              <div className="grid grid-cols-4 gap-2 mb-4">
-                {[["Sent",c.total_sent||0,"text-white"],
-                  ["Runs",c.run_count||0,"text-indigo-400"],
-                  ["Score",`${c.filter_min_score||0}-${c.filter_max_score||100}`,"text-yellow-400"],
-                  ["Stage",c.filter_stage||"all","text-gray-400"],
-                ].map(([label,val,color])=>(
-                  <div key={label} className="bg-gray-800 rounded-lg p-2 text-center">
-                    <p className="text-xs text-gray-500">{label}</p>
-                    <p className={`text-sm font-bold ${color} truncate`}>{val}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Filters */}
-              <div className="flex flex-wrap gap-1.5 mb-4">
-                {c.filter_region && <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded">🌍 {c.filter_region}</span>}
-                {c.filter_industry && <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded">🏭 {c.filter_industry}</span>}
-                {c.filter_company_size && <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded">👥 {c.filter_company_size}</span>}
-                {c.scheduled_at && <span className="text-xs bg-amber-900/30 text-amber-400 px-2 py-0.5 rounded">⏰ {new Date(c.scheduled_at).toLocaleString()}</span>}
-                {c.from_address && <span className="text-xs bg-indigo-900/30 text-indigo-400 px-2 py-0.5 rounded truncate max-w-36">✉ {c.from_address}</span>}
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={()=>trigger(c.campaign_id,c.campaign_name)}
-                  disabled={running[c.campaign_id]}
-                  className="flex items-center gap-1.5 bg-indigo-700 hover:bg-indigo-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
-                  <Play size={11}/>{running[c.campaign_id]?"Sending...":"Send Now"}
-                </button>
-                <button onClick={()=>openDetail(c)}
-                  className="flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs transition-colors">
-                  <TrendingUp size={11}/> Results
-                </button>
-                <button onClick={()=>loadPreview(c.campaign_id)}
-                  className="flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs transition-colors">
-                  <Eye size={11}/> Preview
-                </button>
-                <button onClick={()=>openEdit(c)}
-                  className="flex items-center gap-1.5 bg-yellow-700 hover:bg-yellow-600 px-3 py-1.5 rounded-lg text-xs transition-colors">
-                  ✏️ Edit
-                </button>
-                <button onClick={()=>handleDelete(c.campaign_id, c.campaign_name)}
-                  className="flex items-center gap-1.5 bg-red-800 hover:bg-red-700 px-3 py-1.5 rounded-lg text-xs transition-colors">
-                  🗑️ Delete
-                </button>
-                {!c.azure_token && (
-                  <button onClick={()=>connectOutlook(c.campaign_id)}
-                    className="flex items-center gap-1.5 bg-blue-800 hover:bg-blue-700 px-3 py-1.5 rounded-lg text-xs transition-colors">
-                    <Mail size={11}/> Connect Outlook
-                  </button>
-                )}
-              </div>
-            </div>
+            <CampaignCard
+              key={c.campaign_id}
+              campaign={c}
+              onTrigger={(id, name) => handleTrigger(id, name)}
+              onPreviewContacts={handlePreviewContacts}
+              onCustomize={handleCustomize}
+              onOpenDetail={handleOpenDetail}
+              onLoadPreview={handleLoadPreview}
+              onEdit={setEditTarget}
+              onDelete={handleDeleteCampaign}
+              onConnectOutlook={connectOutlook}
+              isRunning={running[c.campaign_id]}
+            />
           ))}
         </div>
       )}
 
-      {/* Create Campaign Modal */}
-      {showCreate && (
-        <Modal title="New Email Campaign" onClose={()=>setShowCreate(false)} wide>
-          <div className="space-y-4">
-            <Field label="Campaign Name">
-              <Input value={form.campaign_name} onChange={v=>setForm(f=>({...f,campaign_name:v}))} placeholder="BITS Analytics Outreach Q3"/>
-            </Field>
-            <Field label="Service Description" hint="llama3.2 uses this to write personalized emails">
-              <textarea value={form.service_description}
-                onChange={e=>setForm(f=>({...f,service_description:e.target.value}))}
-                placeholder="We provide Big Data & Analytics solutions including data pipelines, BI dashboards, ML models, and real-time analytics platforms for enterprise clients..."
-                rows={3}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 resize-none"/>
-            </Field>
-            <Field label="From Email Address">
-              <Input value={form.from_address} onChange={v=>setForm(f=>({...f,from_address:v}))} placeholder="analytics@bitscompany.com"/>
-            </Field>
+      {customizeLoading && (
+        <Modal title="Generating Email" onClose={() => setCustomizeLoading(false)} wide>
+          <div className="text-center py-12">
+            {/* Spinner */}
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <div className="absolute inset-0 border-4 border-indigo-500/20 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-t-indigo-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+            </div>
 
-            <div className="border-t border-gray-800 pt-4">
-              <p className="text-xs font-medium text-gray-400 mb-3 uppercase tracking-wider">
-                Audience Filters
+            {/* Loading Text */}
+            <p className="text-white font-medium text-lg mb-2">AI is writing your email...</p>
+            <p className="text-gray-400 text-sm mb-6">This may take 20-30 seconds</p>
+
+            {/* Progress Bar */}
+            <div className="w-full max-w-md mx-auto bg-gray-800 rounded-full h-2 mb-6">
+              <div className="bg-indigo-500 h-2 rounded-full animate-pulse" style={{ width: "60%" }}></div>
+            </div>
+
+            {/* Tips */}
+            <div className="bg-gray-800 rounded-lg p-4 max-w-sm mx-auto">
+              <p className="text-xs text-gray-400">
+                <span className="text-indigo-400">💡 Tip:</span> The AI is personalizing the email based on the contact's role, company, and industry.
               </p>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Region / Country code" hint="e.g. US, GB, PK, IN">
-                  <Input value={form.filter_region} onChange={v=>setForm(f=>({...f,filter_region:v}))} placeholder="US"/>
-                </Field>
-                <Field label="Industry keyword">
-                  <Input value={form.filter_industry} onChange={v=>setForm(f=>({...f,filter_industry:v}))} placeholder="technology"/>
-                </Field>
-                <Field label="Company size">
-                  <Select value={form.filter_company_size} onChange={v=>setForm(f=>({...f,filter_company_size:v}))} options={SIZES} placeholder="Any size"/>
-                </Field>
-                <Field label="Lifecycle stage">
-                  <Select value={form.filter_stage} onChange={v=>setForm(f=>({...f,filter_stage:v}))} options={STAGES} placeholder="Any stage"/>
-                </Field>
-                <Field label="Min score (0-100)">
-                  <Input type="number" value={form.filter_min_score} onChange={v=>setForm(f=>({...f,filter_min_score:v}))} placeholder="0"/>
-                </Field>
-                <Field label="Max score (0-100)">
-                  <Input type="number" value={form.filter_max_score} onChange={v=>setForm(f=>({...f,filter_max_score:v}))} placeholder="100"/>
-                </Field>
-              </div>
             </div>
 
-            <Field label="Schedule (optional)" hint="Leave empty to send manually">
-              <Input type="datetime-local" value={form.scheduled_at} onChange={v=>setForm(f=>({...f,scheduled_at:v}))}/>
-            </Field>
-
-            <div className="flex gap-3 pt-2">
-              <button onClick={submit}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-500 py-2.5 rounded-lg text-sm font-medium transition-colors">
-                Create Campaign
-              </button>
-              <button onClick={()=>setShowCreate(false)}
-                className="px-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors">
-                Cancel
-              </button>
-            </div>
+            {/* Cancel Button */}
+            <button
+              onClick={() => {
+                setCustomizeLoading(false);
+                setCustomizeError(null);
+              }}
+              className="mt-6 text-gray-500 hover:text-gray-400 text-sm transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         </Modal>
       )}
 
-      {/* Campaign Detail Modal */}
-      {detail && (
-        <Modal title={detail.campaign.campaign_name} onClose={()=>setDetail(null)} wide>
-          {/* Run stats */}
-          {detail.runs.length > 0 && (
-            <div className="grid grid-cols-5 gap-2 mb-5">
-              {[["Total",detail.runs[0].total_recipients,"text-white"],
-                ["Sent", detail.runs[0].sent_count,       "text-green-400"],
-                ["Failed",detail.runs[0].failed_count,    "text-red-400"],
-                ["Opens",detail.runs[0].open_count,       "text-yellow-400"],
-                ["Replies",detail.replies.length,         "text-indigo-400"],
-              ].map(([l,v,c])=>(
-                <div key={l} className="bg-gray-800 rounded-lg p-3 text-center">
-                  <p className="text-xs text-gray-500">{l}</p>
-                  <p className={`text-xl font-bold ${c}`}>{v}</p>
-                </div>
-              ))}
+      {/* Customize Error Modal */}
+      {customizeError && (
+        <Modal title="Error" onClose={() => setCustomizeError(null)}>
+          <div className="text-center py-6">
+            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <XCircle size={32} className="text-red-400" />
             </div>
-          )}
-
-          {/* Tabs */}
-          <div className="flex gap-2 mb-4 border-b border-gray-800 pb-2">
-            {["recipients","replies"].map(t=>(
-              <button key={t} onClick={()=>setTab(t)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize
-                  ${tab===t?"bg-indigo-600 text-white":"text-gray-400 hover:text-white"}`}>
-                {t} ({t==="recipients" ? detail.recipients.length : detail.replies.length})
-              </button>
-            ))}
-          </div>
-
-          {tab==="recipients" && (
-            <div className="space-y-1 max-h-80 overflow-auto">
-              {detail.recipients.length===0
-                ? <p className="text-gray-600 text-sm text-center py-4">No emails sent yet</p>
-                : detail.recipients.map(r=>(
-                <div key={r.recipient_id} className="flex items-center justify-between py-2 border-b border-gray-800/50">
-                  <div>
-                    <p className="text-sm text-white">{r.first_name} {r.last_name}</p>
-                    <p className="text-xs text-gray-500">{r.company_name} · {r.email}</p>
-                  </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full
-                    ${r.delivery_status==="sent" ? "bg-green-900/50 text-green-300"
-                    : r.delivery_status==="failed" ? "bg-red-900/50 text-red-300"
-                    : "bg-gray-800 text-gray-400"}`}>
-                    {r.delivery_status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {tab==="replies" && (
-            <div className="space-y-2 max-h-80 overflow-auto">
-              {detail.replies.length===0
-                ? <p className="text-gray-600 text-sm text-center py-4">No replies yet</p>
-                : detail.replies.map(r=>(
-                <div key={r.response_id} className="bg-gray-800 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-medium text-white">{r.first_name} {r.last_name}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${INTENT[r.intent_label]||"bg-gray-700 text-gray-400"}`}>
-                      {r.intent_label} · {r.intent_score?.toFixed(1)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-400 line-clamp-2">{r.reply_body}</p>
-                  <p className="text-xs text-gray-600 mt-1">{new Date(r.responded_at).toLocaleString()}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {/* Edit Modal */}
-      {editTarget && (
-        <Modal title="Edit Campaign" onClose={()=>setEditTarget(null)} wide>
-          <div className="space-y-3">
-            <input className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm" placeholder="Campaign name" value={editForm.campaign_name||""} onChange={e=>setEditForm({...editForm,campaign_name:e.target.value})}/>
-            <textarea className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm" rows={2} placeholder="Service description" value={editForm.service_description||""} onChange={e=>setEditForm({...editForm,service_description:e.target.value})}/>
-            <input className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm" placeholder="From email" value={editForm.from_address||""} onChange={e=>setEditForm({...editForm,from_address:e.target.value})}/>
-            <div className="flex gap-2">
-              <input className="flex-1 bg-gray-800 text-white rounded px-3 py-2 text-sm" placeholder="Region (US, GB...)" value={editForm.filter_region||""} onChange={e=>setEditForm({...editForm,filter_region:e.target.value})}/>
-              <input className="flex-1 bg-gray-800 text-white rounded px-3 py-2 text-sm" placeholder="Industry" value={editForm.filter_industry||""} onChange={e=>setEditForm({...editForm,filter_industry:e.target.value})}/>
-            </div>
-            <div className="flex gap-2">
-              <input className="flex-1 bg-gray-800 text-white rounded px-3 py-2 text-sm" placeholder="Min score" type="number" value={editForm.filter_min_score??0} onChange={e=>setEditForm({...editForm,filter_min_score:+e.target.value})}/>
-              <input className="flex-1 bg-gray-800 text-white rounded px-3 py-2 text-sm" placeholder="Max score" type="number" value={editForm.filter_max_score??100} onChange={e=>setEditForm({...editForm,filter_max_score:+e.target.value})}/>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button onClick={saveEdit} className="flex-1 bg-indigo-700 hover:bg-indigo-600 text-white rounded px-4 py-2 text-sm">Save Changes</button>
-              <button onClick={()=>setEditTarget(null)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white rounded px-4 py-2 text-sm">Cancel</button>
-            </div>
+            <p className="text-red-400 mb-2">Failed to generate email</p>
+            <p className="text-gray-400 text-sm mb-6">{customizeError}</p>
+            <button
+              onClick={() => setCustomizeError(null)}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors"
+            >
+              Close
+            </button>
           </div>
         </Modal>
       )}
 
-      {/* Preview Modal */}
-      {preview && (
-        <Modal title="Email Preview" onClose={()=>setPreview(null)} wide>
-          {preview==="loading" ? (
-            <div className="text-center py-8 text-gray-500">
-              Generating personalized email with llama3.2...
-            </div>
-          ) : preview.error ? (
-            <p className="text-red-400 text-sm">{preview.error}</p>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs text-gray-500 mb-1">To</p>
-                <p className="text-sm text-white">{preview.contact?.first_name} {preview.contact?.last_name} · {preview.contact?.email}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Subject</p>
-                <p className="text-sm font-medium text-indigo-300">{preview.email?.subject}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-2">Email Body</p>
-                <div className="bg-gray-800 rounded-lg p-4 text-sm text-gray-300 leading-relaxed"
-                  dangerouslySetInnerHTML={{__html: preview.email?.html || preview.email?.text}}/>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Plain text version</p>
-                <pre className="bg-gray-800 rounded-lg p-3 text-xs text-gray-400 whitespace-pre-wrap max-h-32 overflow-auto">
-                  {preview.email?.text}
-                </pre>
-              </div>
-            </div>
-          )}
-        </Modal>
-      )}
+      {/* Modals */}
+      <CreateCampaignModal
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreate={handleCreateCampaign}
+      />
+
+      <EditCampaignModal
+        isOpen={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        campaign={campaigns.find(c => c.campaign_id === editTarget)}
+        onSave={(data) => handleUpdateCampaign(editTarget, data)}
+      />
+
+      <PreviewContactsModal
+        isOpen={previewContactsModal === "preview"}
+        onClose={() => setPreviewContactsModal(null)}
+        contacts={filteredContacts}
+        campaign={currentCampaign}
+        onSend={handleSendToSelected}
+        onSaveSelection={handleSaveSelection}
+      />
+
+      <CustomizeEmailModal
+        isOpen={customizeModal === "edit"}
+        onClose={() => setCustomizeModal(null)}
+        emailTemplate={emailTemplate}
+        onSave={handleSaveCustomized}
+      />
+
+      <PreviewEmailModal
+        isOpen={!!preview}
+        onClose={() => setPreview(null)}
+        preview={preview}
+      />
+
+      <CampaignDetailModal
+        isOpen={!!detail}
+        onClose={() => setDetail(null)}
+        detail={detail}
+      />
     </div>
   );
 }

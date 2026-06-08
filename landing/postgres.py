@@ -1,17 +1,11 @@
-import os
 import uuid
-import json
 import time
-import psycopg2
-import psycopg2.extras
 from psycopg2.extras import Json
-from landing.redis_client import check_dedup, set_dedup
-from landing.qdrant_client import embed_and_store
+from core.database import get_conn, release_conn, get_dict_cursor
+from core.redis import check_dedup, set_dedup
+from core.qdrant import embed_and_store
+from core.logger import logger
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-def get_conn():
-    return psycopg2.connect(DATABASE_URL)
 
 def write_to_landing_zone(record: dict, campaign_id: str, trace_id: str):
     dedup_key = record.get("dedup_key", "")

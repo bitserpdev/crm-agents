@@ -19,13 +19,19 @@ class ApifyLinkedInConnector(BaseConnector):
     def get_auth_url(self): return ""
     def handle_oauth_callback(self, code): return {"status": "apify uses api token"}
 
-    def poll(self, campaign_config: dict) -> List[Dict[str, Any]]:
-        filters    = campaign_config.get("filters", {})
-        lf         = campaign_config.get("linkedin_filters", {})
-        extract_types = campaign_config.get("extract_types", ["jobs", "profiles"])
-        results    = []
+    def _get_cookies(self) -> str:
+        li_at = os.getenv("LINKEDIN_LI_AT_COOKIE", "")
+        if not li_at:
+            print("[Apify] No LinkedIn cookie set")
+            return ""
+        return f"li_at={li_at}"
 
-        # Build search query from linkedin_filters
+    def poll(self, campaign_config: dict) -> List[Dict[str, Any]]:
+        filters       = campaign_config.get("filters", {})
+        lf            = campaign_config.get("linkedin_filters", {})
+        extract_types = campaign_config.get("extract_types", ["jobs", "profiles"])
+        results       = []
+
         keywords = filters.get("keywords", "")
         if not keywords and lf:
             parts = []
@@ -54,10 +60,11 @@ class ApifyLinkedInConnector(BaseConnector):
     def _fetch_jobs(self, filters: dict) -> list:
         try:
             run = self.client.actor(ACTOR_ID).call(run_input={
-                "searchQuery": filters.get("keywords", "software engineer"),
-                "location":    filters.get("location", "United States"),
-                "maxResults":  filters.get("count", 10),
-                "mode":        "jobs",
+                "searchQuery":  filters.get("keywords", "software engineer"),
+                "location":     filters.get("location", "United States"),
+                "maxResults":   filters.get("count", 10),
+                "mode":         "jobs",
+                "loginCookies": self._get_cookies(),
             })
             items = [i for i in self.client.dataset(run["defaultDatasetId"]).iterate_items()
                      if i.get("resultType") != "bandwidth_report"]
@@ -69,14 +76,22 @@ class ApifyLinkedInConnector(BaseConnector):
 
     def _fetch_profiles(self, filters: dict) -> list:
         try:
-            run = self.client.actor(ACTOR_ID).call(run_input={
-                "searchQuery": filters.get("keywords", "software engineer"),
-                "location":    filters.get("location", "United States"),
-                "maxResults":  filters.get("count", 10),
-                "mode":        "search_profiles",
-            })
+            li_at = os.getenv("LINKEDIN_LI_AT_COOKIE", "")
+            run_input = {
+                "searchQuery":   filters.get("keywords", "software engineer"),
+                "location":      filters.get("location", "United States"),
+                "maxResults":    filters.get("count", 10),
+                "mode":          "search_profiles",
+                "discoverEmails": True,
+            }
+            if li_at:
+                run_input["loginCookies"] = f"li_at={li_at}"
+                print(f"[Apify] Using LinkedIn cookie: {li_at[:20]}...")
+            run = self.client.actor(ACTOR_ID).call(run_input=run_input)
             items = [i for i in self.client.dataset(run["defaultDatasetId"]).iterate_items()
-                     if i.get("resultType") != "bandwidth_report"]
+                     if i.get("resultType") != "bandwidth_report"
+                     and not i.get("error")
+                     and i.get("name")]
             print(f"[Apify] Raw profiles received: {len(items)}")
             return [self.normalize(i, "profile") for i in items if i]
         except Exception as e:
@@ -102,41 +117,73 @@ class ApifyLinkedInConnector(BaseConnector):
             }
 
         if data_type == "profile":
-            url      = raw.get("url", "")
+            # Try multiple URL fields
+            url = (
+                raw.get("url") or
+                raw.get("linkedinUrl") or
+                raw.get("linkedin_url") or
+                raw.get("profileUrl") or ""
+            )
+            # Try multiple location fields
             loc_raw  = raw.get("location_normalized", {}) or {}
             location = (
                 loc_raw.get("raw") or
-                raw.get("location") or ""
+                raw.get("location") or
+                raw.get("city") or ""
             )
+            # Try multiple email fields
             email = (
                 raw.get("email") or
+                raw.get("emailAddress") or
                 (raw.get("guessed_emails") or [None])[0] or
+                (raw.get("emails") or [{}])[0].get("email") or
                 ""
             )
+            # Try multiple name fields
+            name = (
+                raw.get("name") or
+                raw.get("fullName") or
+                f"{raw.get('firstName','')} {raw.get('lastName','')}".strip() or ""
+            )
+            # Try multiple company fields
+            company = (
+                raw.get("current_company") or
+                raw.get("currentCompany") or
+                raw.get("company") or ""
+            )
+            # Try multiple title fields
+            title = (
+                raw.get("current_title") or
+                raw.get("currentTitle") or
+                raw.get("headline") or
+                raw.get("title") or ""
+            )
+            # Debug raw keys
+            print(f"[Apify] Raw keys: {list(raw.keys())[:15]}")
             return {
-                "type":          "profile",
-                "platform":      "linkedin",
-                "name":          raw.get("name") or "",
-                "headline":      raw.get("headline") or "",
-                "title":         raw.get("current_title") or raw.get("headline") or "",
-                "location":      location,
-                "company":       raw.get("current_company") or "",
-                "current_title": raw.get("current_title") or "",
-                "current_company": raw.get("current_company") or "",
-                "industry":      raw.get("industry") or "",
-                "email":         email,
-                "phone":         raw.get("phone") or "",
-                "connections":   raw.get("connections_count") or 0,
-                "followers":     raw.get("follower_count") or 0,
-                "open_to_work":  raw.get("open_to_work") or False,
-                "skills":        raw.get("skills") or [],
-                "picture_url":   raw.get("picture_url") or "",
-                "profile_url":   url,
-                "url":           url,
-                "company_website": raw.get("company_website") or "",
-                "raw":           raw,
-                "dedup_key":     self.make_dedup_key({"url": url}),
-                "received_at":   datetime.now(timezone.utc).isoformat(),
+                "type":            "profile",
+                "platform":        "linkedin",
+                "name":            name,
+                "headline":        raw.get("headline") or title,
+                "title":           title,
+                "location":        location,
+                "company":         company,
+                "current_title":   title,
+                "current_company": company,
+                "industry":        raw.get("industry") or raw.get("companyIndustry") or "",
+                "email":           email,
+                "phone":           raw.get("phone") or raw.get("phoneNumber") or "",
+                "connections":     raw.get("connections_count") or raw.get("connectionsCount") or 0,
+                "followers":       raw.get("follower_count") or raw.get("followersCount") or 0,
+                "open_to_work":    raw.get("open_to_work") or raw.get("openToWork") or False,
+                "skills":          raw.get("skills") or [],
+                "picture_url":     raw.get("picture_url") or raw.get("profilePicture") or "",
+                "profile_url":     url,
+                "url":             url,
+                "company_website": raw.get("company_website") or raw.get("companyWebsite") or "",
+                "raw":             raw,
+                "dedup_key":       self.make_dedup_key({"url": url}),
+                "received_at":     datetime.now(timezone.utc).isoformat(),
             }
 
         return raw

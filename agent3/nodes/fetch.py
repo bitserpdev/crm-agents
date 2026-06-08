@@ -12,10 +12,13 @@ def fetch_node(state: Agent3State) -> Agent3State:
 
     cur.execute("SELECT * FROM crm.crm_campaigns WHERE campaign_id = %s",
                 (state["campaign_id"],))
+    
     campaign = dict(cur.fetchone())
+
     state["campaign"] = campaign
 
     run_id = str(uuid.uuid4())
+
     state["run_id"] = run_id
     cur.execute("""
         INSERT INTO crm.crm_campaign_runs
@@ -25,6 +28,7 @@ def fetch_node(state: Agent3State) -> Agent3State:
     conn.commit()
 
     audience = campaign.get("campaign_audience") or "contacts"
+
     contacts = []
 
     if audience in ("contacts", "all"):
@@ -46,7 +50,8 @@ def fetch_node(state: Agent3State) -> Agent3State:
         SET total_recipients = %s WHERE run_id = %s
     """, (len(contacts), run_id))
     conn.commit()
-    cur.close(); conn.close()
+    cur.close()
+    conn.close()
 
     state["contacts"]   = contacts
     state["run_status"] = "running" if contacts else "done"
@@ -61,6 +66,7 @@ def _fetch_contacts(cur, campaign: dict, campaign_id: str) -> list:
         "c.email IS NOT NULL",
         "c.email NOT LIKE '%%placeholder%%'",
     ]
+    print(f"[agent3/fetch] Applying filters for contacts...")
     values = []
 
     if campaign.get("filter_region"):
@@ -101,6 +107,7 @@ def _fetch_contacts(cur, campaign: dict, campaign_id: str) -> list:
     """)
     values.append(campaign_id)
 
+
     where = "WHERE " + " AND ".join(filters)
 
     cur.execute(f"""
@@ -136,7 +143,8 @@ def _fetch_contacts(cur, campaign: dict, campaign_id: str) -> list:
         LIMIT 100
     """, values)
 
-    results = [dict(r) for r in cur.fetchall()]
+    results = [[dict(r) for r in cur.fetchall()][-1]]
+    print("results => ", results)
     print(f"[agent3/fetch] Contacts matched: {len(results)}")
     return results
 

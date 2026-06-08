@@ -7,39 +7,39 @@ import {
 import axios from "axios";
 
 const API = axios.create({ baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000" });
-const getConversations = (p) => API.get("/api/agent4/conversations", { params: p });
-const getStats         = (p) => API.get("/api/agent4/conversations/stats", { params: p });
-const getThread        = (id) => API.get(`/api/agent4/conversations/${id}/thread`);
-const getCampaigns     = ()  => API.get("/api/agent3/campaigns");
+const getConversations = (p) => API.get("/api/campaigns/sequences/conversations", { params: p });
+const getStats = (p) => API.get("/api/campaigns/sequences/conversations/stats", { params: p });
+const getThread = (id) => API.get(`/api/campaigns/sequences/conversations/${id}/thread`);
+const getCampaigns = () => API.get("/api/campaigns/email");
 
 const INTENT = {
-  hot:             { color: "bg-green-900/50 text-green-300 border-green-700",    icon: Flame,       label: "Hot" },
-  warm:            { color: "bg-yellow-900/50 text-yellow-300 border-yellow-700", icon: Thermometer, label: "Warm" },
-  cold:            { color: "bg-gray-800 text-gray-400 border-gray-600",          icon: Snowflake,   label: "Cold" },
-  unsubscribe:     { color: "bg-red-900/50 text-red-300 border-red-700",          icon: BellOff,     label: "Unsub" },
-  call_requested:  { color: "bg-green-900/50 text-green-300 border-green-700",    icon: Phone,       label: "Call" },
+  hot: { color: "bg-green-900/50 text-green-300 border-green-700", icon: Flame, label: "Hot" },
+  warm: { color: "bg-yellow-900/50 text-yellow-300 border-yellow-700", icon: Thermometer, label: "Warm" },
+  cold: { color: "bg-gray-800 text-gray-400 border-gray-600", icon: Snowflake, label: "Cold" },
+  unsubscribe: { color: "bg-red-900/50 text-red-300 border-red-700", icon: BellOff, label: "Unsub" },
+  call_requested: { color: "bg-green-900/50 text-green-300 border-green-700", icon: Phone, label: "Call" },
 };
 
 const STATUS = {
-  active:                { color: "bg-indigo-900/50 text-indigo-300",  label: "Active" },
-  call_scheduled:        { color: "bg-green-900/50 text-green-300",    label: "Call Scheduled" },
-  awaiting_availability: { color: "bg-yellow-900/50 text-yellow-300",  label: "Awaiting Time" },
-  unsubscribed:          { color: "bg-red-900/50 text-red-300",        label: "Unsubscribed" },
-  exhausted:             { color: "bg-gray-800 text-gray-400",         label: "Exhausted" },
+  active: { color: "bg-indigo-900/50 text-indigo-300", label: "Active" },
+  call_scheduled: { color: "bg-green-900/50 text-green-300", label: "Call Scheduled" },
+  awaiting_availability: { color: "bg-yellow-900/50 text-yellow-300", label: "Awaiting Time" },
+  unsubscribed: { color: "bg-red-900/50 text-red-300", label: "Unsubscribed" },
+  exhausted: { color: "bg-gray-800 text-gray-400", label: "Exhausted" },
 };
 
 const TABS = [
-  { key: "all",           label: "All",            icon: Users },
-  { key: "hot",           label: "Hot",            icon: Flame },
-  { key: "warm",          label: "Warm",           icon: Thermometer },
-  { key: "cold",          label: "Cold",           icon: Snowflake },
-  { key: "call_scheduled",label: "Call Scheduled", icon: Phone },
-  { key: "unsubscribed",  label: "Unsubscribed",   icon: BellOff },
+  { key: "all", label: "All", icon: Users },
+  { key: "hot", label: "Hot", icon: Flame },
+  { key: "warm", label: "Warm", icon: Thermometer },
+  { key: "cold", label: "Cold", icon: Snowflake },
+  { key: "call_scheduled", label: "Call Scheduled", icon: Phone },
+  { key: "unsubscribed", label: "Unsubscribed", icon: BellOff },
 ];
 
 function fmt(ts) {
   if (!ts) return "";
-  return new Date(ts).toLocaleString([], { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+  return new Date(ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 function timeAgo(ts) {
   if (!ts) return "";
@@ -81,15 +81,15 @@ function Bubble({ msg, contactName }) {
           <span className="text-xs text-gray-600">{fmt(msg.ts)}</span>
           {intentCfg && Icon && (
             <span className={`text-xs px-1.5 py-0.5 rounded-full border flex items-center gap-1 ${intentCfg.color}`}>
-              <Icon size={9}/>{intentCfg.label}
+              <Icon size={9} />{intentCfg.label}
             </span>
           )}
           {msg.type === "initial" && (
             <span className="text-xs text-gray-600 italic">initial</span>
           )}
           {isOut
-            ? <ArrowUpRight size={10} className="text-indigo-400"/>
-            : <ArrowDownLeft size={10} className="text-green-400"/>}
+            ? <ArrowUpRight size={10} className="text-indigo-400" />
+            : <ArrowDownLeft size={10} className="text-green-400" />}
         </div>
       </div>
     </div>
@@ -98,7 +98,7 @@ function Bubble({ msg, contactName }) {
 
 // ── Thread Modal ──────────────────────────────────────────────────────────────
 function ThreadModal({ seq, onClose }) {
-  const [thread,  setThread]  = useState(null);
+  const [thread, setThread] = useState(null);
   const [loading, setLoading] = useState(true);
   const bottomRef = useRef(null);
 
@@ -112,7 +112,7 @@ function ThreadModal({ seq, onClose }) {
     if (thread) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [thread]);
 
-  const name      = `${seq.first_name || ""} ${seq.last_name || ""}`.trim();
+  const name = `${seq.first_name || ""} ${seq.last_name || ""}`.trim();
   const statusCfg = STATUS[seq.status] || STATUS.active;
   const intentCfg = seq.last_intent_label ? INTENT[seq.last_intent_label] : null;
   const IntentIcon = intentCfg?.icon;
@@ -135,7 +135,7 @@ function ThreadModal({ seq, onClose }) {
                 </span>
                 {intentCfg && IntentIcon && (
                   <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${intentCfg.color}`}>
-                    <IntentIcon size={9}/>{intentCfg.label}
+                    <IntentIcon size={9} />{intentCfg.label}
                   </span>
                 )}
               </div>
@@ -145,21 +145,21 @@ function ThreadModal({ seq, onClose }) {
             </div>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
-            <X size={18}/>
+            <X size={18} />
           </button>
         </div>
 
         {/* Teams meeting banner — shown when call is scheduled */}
         {thread?.meeting && (
           <div className="mx-6 mt-3 flex-shrink-0 bg-green-900/20 border border-green-700/50 rounded-xl px-4 py-3 flex items-center gap-3">
-            <Video size={16} className="text-green-400 flex-shrink-0"/>
+            <Video size={16} className="text-green-400 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-green-300">Teams Meeting Scheduled</p>
               <p className="text-xs text-gray-500 truncate">{thread.meeting.subject}</p>
             </div>
             <a href={thread.meeting.join_url} target="_blank" rel="noreferrer"
               className="flex items-center gap-1 text-xs bg-green-700 hover:bg-green-600 px-3 py-1.5 rounded-lg text-white transition-colors flex-shrink-0">
-              Join <ArrowUpRight size={11}/>
+              Join <ArrowUpRight size={11} />
             </a>
           </div>
         )}
@@ -172,10 +172,10 @@ function ThreadModal({ seq, onClose }) {
             <div className="text-center text-gray-600 py-10 text-sm">No messages yet</div>
           ) : (
             thread.messages.map((msg, i) => (
-              <Bubble key={i} msg={msg} contactName={name}/>
+              <Bubble key={i} msg={msg} contactName={name} />
             ))
           )}
-          <div ref={bottomRef}/>
+          <div ref={bottomRef} />
         </div>
 
         <div className="px-6 py-3 border-t border-gray-800 flex items-center justify-between flex-shrink-0">
@@ -214,18 +214,18 @@ function CallScheduledCard({ seq, onClick }) {
         <a href={seq.teams_join_url} target="_blank" rel="noreferrer"
           onClick={e => e.stopPropagation()}
           className="flex items-center justify-center gap-2 w-full bg-green-700/30 hover:bg-green-700/50 border border-green-700/50 rounded-xl py-3 text-sm font-medium text-green-300 transition-colors mb-3">
-          <Video size={15}/> Join Teams Meeting
+          <Video size={15} /> Join Teams Meeting
         </a>
       ) : (
         <div className="flex items-center justify-center gap-2 w-full bg-gray-800 border border-gray-700 rounded-xl py-3 text-sm text-gray-500 mb-3">
-          <Video size={15}/> Meeting link pending
+          <Video size={15} /> Meeting link pending
         </div>
       )}
 
       <div className="flex items-center justify-between">
         <span className="text-xs text-gray-600">{seq.campaign_name}</span>
         <span className="text-xs text-gray-500 flex items-center gap-1">
-          <MessageSquare size={9}/> {seq.total_messages} messages
+          <MessageSquare size={9} /> {seq.total_messages} messages
         </span>
       </div>
     </div>
@@ -234,10 +234,10 @@ function CallScheduledCard({ seq, onClick }) {
 
 // ── Regular Conversation Card ─────────────────────────────────────────────────
 function ConvCard({ seq, onClick }) {
-  const name      = `${seq.first_name || ""} ${seq.last_name || ""}`.trim();
+  const name = `${seq.first_name || ""} ${seq.last_name || ""}`.trim();
   const intentCfg = seq.last_intent_label ? INTENT[seq.last_intent_label] : null;
   const IntentIcon = intentCfg?.icon;
-  const statusCfg  = STATUS[seq.status] || STATUS.active;
+  const statusCfg = STATUS[seq.status] || STATUS.active;
 
   return (
     <div onClick={onClick}
@@ -255,13 +255,13 @@ function ConvCard({ seq, onClick }) {
             </p>
           </div>
         </div>
-        <ChevronRight size={14} className="text-gray-600 group-hover:text-indigo-400 flex-shrink-0 mt-0.5 transition-colors"/>
+        <ChevronRight size={14} className="text-gray-600 group-hover:text-indigo-400 flex-shrink-0 mt-0.5 transition-colors" />
       </div>
 
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         {intentCfg && IntentIcon && (
           <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${intentCfg.color}`}>
-            <IntentIcon size={9}/>{intentCfg.label}
+            <IntentIcon size={9} />{intentCfg.label}
           </span>
         )}
         <span className={`text-xs px-2 py-0.5 rounded-full ${statusCfg.color}`}>
@@ -279,7 +279,7 @@ function ConvCard({ seq, onClick }) {
         <span className="text-xs text-gray-600">{seq.campaign_name}</span>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-600 flex items-center gap-1">
-            <MessageSquare size={9}/>{seq.total_messages}
+            <MessageSquare size={9} />{seq.total_messages}
           </span>
           <span className="text-xs text-indigo-400">{timeAgo(seq.last_reply_at)}</span>
         </div>
@@ -290,13 +290,13 @@ function ConvCard({ seq, onClick }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Conversations() {
-  const [tab,        setTab]        = useState("all");
-  const [sequences,  setSequences]  = useState([]);
-  const [stats,      setStats]      = useState({});
-  const [campaigns,  setCampaigns]  = useState([]);
+  const [tab, setTab] = useState("all");
+  const [sequences, setSequences] = useState([]);
+  const [stats, setStats] = useState({});
+  const [campaigns, setCampaigns] = useState([]);
   const [campFilter, setCampFilter] = useState("");
-  const [selected,   setSelected]   = useState(null);
-  const [loading,    setLoading]    = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -304,7 +304,7 @@ export default function Conversations() {
       const [seqRes, statsRes, campRes] = await Promise.all([
         getConversations({ campaign_id: campFilter || undefined, intent: tab }),
         getStats({ campaign_id: campFilter || undefined }),
-        getCampaigns(),
+        []
       ]);
       setSequences(seqRes.data);
       setStats(statsRes.data);
@@ -315,11 +315,11 @@ export default function Conversations() {
   useEffect(() => { load(); }, [tab, campFilter]);
 
   const statCards = [
-    { label: "Total",          value: stats.total          || 0, color: "text-white" },
-    { label: "Hot",            value: stats.hot            || 0, color: "text-green-400" },
-    { label: "Warm",           value: stats.warm           || 0, color: "text-yellow-400" },
+    { label: "Total", value: stats.total || 0, color: "text-white" },
+    { label: "Hot", value: stats.hot || 0, color: "text-green-400" },
+    { label: "Warm", value: stats.warm || 0, color: "text-yellow-400" },
     { label: "Call Scheduled", value: stats.call_scheduled || 0, color: "text-green-300" },
-    { label: "Unsubscribed",   value: stats.unsubscribed   || 0, color: "text-red-400" },
+    { label: "Unsubscribed", value: stats.unsubscribed || 0, color: "text-red-400" },
   ];
 
   return (
@@ -327,7 +327,7 @@ export default function Conversations() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <MessageSquare size={22} className="text-indigo-400"/> Conversations
+            <MessageSquare size={22} className="text-indigo-400" /> Conversations
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
             Contacts who replied · AI-managed responses · Teams call scheduling
@@ -337,10 +337,10 @@ export default function Conversations() {
           <select value={campFilter} onChange={e => setCampFilter(e.target.value)}
             className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
             <option value="">All Campaigns</option>
-            {campaigns.map(c => <option key={c.campaign_id} value={c.campaign_id}>{c.campaign_name}</option>)}
+            {campaigns?.map(c => <option key={c.campaign_id} value={c.campaign_id}>{c.campaign_name}</option>)}
           </select>
           <button onClick={load} className="bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg text-sm transition-colors">
-            <RefreshCw size={14}/>
+            <RefreshCw size={14} />
           </button>
         </div>
       </div>
@@ -361,7 +361,7 @@ export default function Conversations() {
           <button key={key} onClick={() => setTab(key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap
               ${tab === key ? "bg-indigo-600 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"}`}>
-            <Icon size={13}/>{label}
+            <Icon size={13} />{label}
             {key !== "all" && (stats[key] || 0) > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded-full ml-0.5
                 ${tab === key ? "bg-white/20 text-white" : "bg-gray-700 text-gray-400"}`}>
@@ -377,7 +377,7 @@ export default function Conversations() {
         <div className="text-center text-gray-600 py-12 text-sm">Loading conversations...</div>
       ) : sequences.length === 0 ? (
         <div className="text-center py-16">
-          <MessageSquare size={40} className="text-gray-700 mx-auto mb-3"/>
+          <MessageSquare size={40} className="text-gray-700 mx-auto mb-3" />
           <p className="text-gray-500 text-sm">No conversations yet.</p>
           <p className="text-gray-600 text-xs mt-1">They appear here when contacts reply to your campaigns.</p>
         </div>
@@ -385,15 +385,15 @@ export default function Conversations() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sequences.map(seq =>
             seq.status === "call_scheduled" ? (
-              <CallScheduledCard key={seq.sequence_id} seq={seq} onClick={() => setSelected(seq)}/>
+              <CallScheduledCard key={seq.sequence_id} seq={seq} onClick={() => setSelected(seq)} />
             ) : (
-              <ConvCard key={seq.sequence_id} seq={seq} onClick={() => setSelected(seq)}/>
+              <ConvCard key={seq.sequence_id} seq={seq} onClick={() => setSelected(seq)} />
             )
           )}
         </div>
       )}
 
-      {selected && <ThreadModal seq={selected} onClose={() => setSelected(null)}/>}
+      {selected && <ThreadModal seq={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

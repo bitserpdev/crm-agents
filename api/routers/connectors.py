@@ -68,3 +68,20 @@ async def linkedin_webhook(request: Request):
     }
     push_to_inbound_queue(event)
     return {"status": "queued", "event_id": event["event_id"]}
+
+@router.get("/upwork/auth")
+def upwork_auth():
+    # Apify uses API token stored in env, no OAuth flow
+    return {"message": "Upwork uses Apify API token. Set APIFY_API_TOKEN in .env"}
+
+@router.post("/upwork/webhook")
+async def upwork_webhook(request: Request):
+    payload = await request.json()
+    event = {
+        "event_id":        str(uuid.uuid4()),
+        "source_platform": "upwork",
+        "received_at":     datetime.now(timezone.utc).isoformat(),
+        "raw_payload":     payload
+    }
+    push_to_inbound_queue(event)
+    return {"status": "queued", "event_id": event["event_id"]}

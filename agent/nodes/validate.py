@@ -91,6 +91,17 @@ def validate_node(state: AgentState) -> AgentState:
     print(f"[validate] Validating {total} records...")
 
     for i, record in enumerate(state["raw_records"]):
+        platform = record.get("platform", "")
+
+        if platform == "upwork":
+            title = record.get("title", "").strip()
+            if not title:
+                print(f"[validate] Upwork job {i+1}/{total} rejected: missing title")
+                continue
+            print(f"[validate] Upwork job auto-validated: {title[:50]}")
+            validated.append(record)
+            continue
+            
         try:
             name  = (record.get("name") or "").strip()
             title = (record.get("current_title") or record.get("title") or

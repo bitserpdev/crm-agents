@@ -3,9 +3,9 @@ import { Clock, RefreshCw, Mail, Eye, EyeOff, Users, AlertCircle, Send } from "l
 import axios from "axios";
 
 const API = axios.create({ baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000" });
-const getFollowups = (p) => API.get("/api/agent4/followups", { params: p });
-const getStats     = (p) => API.get("/api/agent4/followups/stats", { params: p });
-const getCampaigns = ()  => API.get("/api/agent3/campaigns");
+const getFollowups = (p) => API.get("/api/campaigns/sequences/followups",       { params: p });
+const getStats     = (p) => API.get("/api/campaigns/sequences/followups/stats", { params: p });
+const getCampaigns = ()  => API.get("/api/campaigns/emails");
 
 const TABS = [
   { key: "all",       label: "All",           icon: Users,       statKey: "total" },
