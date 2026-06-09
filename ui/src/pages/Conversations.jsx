@@ -304,7 +304,7 @@ export default function Conversations() {
       const [seqRes, statsRes, campRes] = await Promise.all([
         getConversations({ campaign_id: campFilter || undefined, intent: tab }),
         getStats({ campaign_id: campFilter || undefined }),
-        []
+        getCampaigns(),
       ]);
       setSequences(seqRes.data);
       setStats(statsRes.data);

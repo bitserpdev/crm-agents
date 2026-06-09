@@ -100,3 +100,11 @@ def run_agent4():
 
     reply_service.run_agent4_worker()
     return {"status": "done"}
+
+
+@app.post("/dev/backfill-conversations")
+def backfill_conversations():
+    """Create conversation sequence rows for past replies missing from the UI."""
+    from agents.agent4.backfill_sequences import backfill_conversation_sequences
+
+    return backfill_conversation_sequences()

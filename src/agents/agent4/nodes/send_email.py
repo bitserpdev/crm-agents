@@ -19,15 +19,21 @@ def send_email_node(state: Agent4State) -> Agent4State:
         return state
 
     body = state.get("reply_body", "")
+    sequence = state.get("sequence") or {}
+    zoom_url = (
+        state.get("teams_meeting_url")
+        or sequence.get("zoom_meeting_url")
+        or sequence.get("teams_meeting_url")
+        or ""
+    )
 
-    # Resolve [ZOOM_LINK] placeholder before formatting
     if "[ZOOM_LINK]" in body:
-        zoom_url = (
-            state.get("teams_meeting_url")
-            or (state.get("sequence") or {}).get("zoom_meeting_url")
-            or ""
-        )
         body = body.replace("[ZOOM_LINK]", zoom_url)
+    elif state.get("call_situation") == "send_zoom" and zoom_url and zoom_url not in body:
+        body = f"{body.rstrip()}\n\nJoin the call here:\n{zoom_url}\n"
+
+    if state.get("call_situation") == "send_zoom" and not zoom_url:
+        print("[agent4/send] Warning — send_zoom but no Zoom URL available")
 
     ctx = format_context_from_contact(state.get("contact", {}))
     body_text, body_html = format_email_body(body, ctx)

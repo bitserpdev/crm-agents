@@ -30,15 +30,27 @@ _MONTHS = (
     "july", "august", "september", "october", "november", "december",
 )
 _SCHEDULE_PHRASES = (
-    "schedule a call", "schedule a meeting", "book a call", "book a meeting",
-    "set up a call", "arrange a call", "arrange a meeting", "propose a time",
-    "alternative times", "scheduling link", "calendar invite", "could we schedule",
+    "schedule a call", "schedule a meeting", "schedule a brief call",
+    "book a call", "book a meeting", "set up a call", "arrange a call",
+    "arrange a meeting", "propose a time", "alternative times",
+    "scheduling link", "calendar invite", "could we schedule",
+    "happy to schedule", "would like to schedule", "share your availability",
+    "share availability", "look forward to our discussion",
+    "look forward to our call", "accommodate a suitable time",
+)
+_AGENT_AVAILABILITY_PHRASES = (
+    "share your availability", "share availability", "your availability for",
+    "when are you available", "what times are you available",
+    "accommodate a suitable time",
 )
 _CONFIRM_PHRASES = (
-    "works for me", "that works", "i'll be available", "i am available on",
-    "i'm available on", "let's meet", "let's schedule", "see you on", "see you at",
-    "confirm", "sounds good for", "book", "slot",
+    "works for me", "that works", "i'll be available", "i am available",
+    "i'm available", "i am available on", "i'm available on", "available next",
+    "let's meet", "let's schedule", "see you on", "see you at",
+    "confirm", "sounds good for", "a call sounds good", "call sounds good",
+    "book", "slot",
 )
+_TIME_WINDOW_RE = re.compile(r"\b(morning|afternoon|evening|noon)\b", re.I)
 _TIME_RE = re.compile(
     r"\b\d{1,2}:\d{2}\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b",
     re.I,
@@ -74,24 +86,46 @@ def _has_weekday(text: str) -> bool:
     return bool(_WEEKDAY_RE.search(text))
 
 
+def _has_time_window(text: str) -> bool:
+    """Broad windows like afternoon/morning when no clock time is given."""
+    return bool(_TIME_WINDOW_RE.search(text))
+
+
+def prospect_shared_availability(text: str) -> bool:
+    """True when the prospect offered days and/or windows for a call."""
+    lower = text.lower()
+    has_weekday = _has_weekday(text)
+    has_month_date = bool(_DATE_RE.search(text))
+    has_clock_time = _has_clock_time(text)
+    has_window = _has_time_window(text)
+    confirmed = any(p in lower for p in _CONFIRM_PHRASES)
+
+    if has_weekday and (has_clock_time or has_window):
+        return True
+    if has_month_date and (has_clock_time or has_window):
+        return True
+    if confirmed and (has_weekday or has_month_date or has_clock_time or has_window):
+        return True
+    if is_scheduling_request(text) and has_weekday and (confirmed or has_window):
+        return True
+    return False
+
+
 def has_proposed_meeting_time(text: str) -> bool:
     """True when the prospect names a specific date and/or time for a call."""
+    if prospect_shared_availability(text):
+        return True
+
     lower = text.lower()
     has_weekday = _has_weekday(text)
     has_month_date = bool(_DATE_RE.search(text))
     has_clock_time = _has_clock_time(text)
 
-    if has_weekday and has_clock_time:
-        return True
     if has_month_date and has_clock_time:
         return True
     if re.search(r"\btoday\b", lower) and has_clock_time:
         return True
     if is_scheduling_request(text) and has_clock_time and (has_month_date or has_weekday):
-        return True
-    if any(p in lower for p in _CONFIRM_PHRASES) and (
-        has_clock_time or has_month_date or has_weekday
-    ):
         return True
     return False
 
@@ -131,8 +165,37 @@ def requests_more_details(text: str) -> bool:
     return any(p in lower for p in _DETAIL_PHRASES)
 
 
+def requests_agent_availability(text: str) -> bool:
+    """Prospect asked the sales rep to propose meeting times."""
+    lower = text.lower()
+    return any(p in lower for p in _AGENT_AVAILABILITY_PHRASES)
+
+
+def wants_to_schedule_call(text: str) -> bool:
+    """Prospect wants to book a call (may still need times from either side)."""
+    if prospect_shared_availability(text):
+        return True
+    lower = text.lower()
+    call_intents = (
+        "happy to schedule", "would be happy to schedule", "would like to schedule",
+        "love to schedule", "glad to schedule", "schedule a brief call",
+        "schedule a call", "set up a brief call", "set up a call",
+        "book a time", "arrange a call", "look forward to our discussion",
+        "look forward to our call", "let's schedule", "lets schedule",
+    )
+    if any(p in lower for p in call_intents):
+        return True
+    return is_scheduling_request(text)
+
+
 def wants_more_info(text: str) -> bool:
     """Prospect asked about approach/services before committing to a call."""
+    if wants_to_schedule_call(text):
+        if requests_agent_availability(text):
+            return False
+        # "learn more on the call" is scheduling context, not a pre-call info request
+        if not requests_more_details(text):
+            return False
     if requests_more_details(text):
         return True
     lower = text.lower()
@@ -338,7 +401,19 @@ def sanitize_scheduling_language(
 
     body = _strip_invented_meeting_confirmations(body)
     body = re.sub(r"(?i)please let me know which day works best[^.?!]*[.?!]?", "", body)
+    body = re.sub(
+        r"(?i)what days(?: and times)? work best(?: for (?:you|a call))?[^.?!]*[.?!]?",
+        "",
+        body,
+    )
     body = re.sub(r"(?i)would you be available for a quick call\s*\?", "", body)
+    if prospect_shared_availability(prospect_reply):
+        body = re.sub(
+            r"(?i)(?:which|what) days?(?: and times)? work[^.?!]*[.?!]?",
+            "",
+            body,
+        )
+        body = re.sub(r"(?i)\bthis week or\s*\?", "?", body)
     body = re.sub(
         r"(?i)(?:perhaps we could schedule|schedule)\s+for\s+next week[^.?!]*[.?!]?",
         "",
@@ -357,7 +432,13 @@ def sanitize_scheduling_language(
     body = body.strip()
 
     lower = body.lower()
-    if situation == "ask_availability" and "work best" not in lower:
+    prospect_shared_days = bool(mentioned_days(prospect_reply)) or _has_weekday(prospect_reply)
+    if (
+        situation == "ask_availability"
+        and "work best" not in lower
+        and not prospect_shared_days
+        and not prospect_shared_availability(prospect_reply)
+    ):
         body = body.rstrip()
         if body and not body.endswith((".", "!", "?")):
             body += "."
@@ -373,6 +454,29 @@ def sanitize_scheduling_language(
     return body.strip()
 
 
+def ensure_zoom_placeholder(body: str) -> str:
+    """
+    send_zoom emails must include [ZOOM_LINK].
+    Remove empty 'I'll send the link' promises the LLM sometimes writes instead.
+    """
+    body = re.sub(
+        r"(?i)\bi(?:'ll| will) send you the (?:zoom |calendar |meeting )?link[^.?!]*[.?!]?\s*",
+        "",
+        body,
+    )
+    body = re.sub(
+        r"(?i)\bhere is the (?:zoom |calendar |meeting )?link[^.?!:\n]*[.?!:\n]?\s*",
+        "",
+        body,
+    )
+    if "[ZOOM_LINK]" not in body:
+        body = body.rstrip()
+        if body and not body.endswith((".", "!", "?")):
+            body += "."
+        body += "\n\nJoin the call here:\n[ZOOM_LINK]"
+    return body.strip()
+
+
 def polish_reply_body(
     body: str,
     prospect_reply: str,
@@ -381,7 +485,8 @@ def polish_reply_body(
 ) -> str:
     """Final cleanup: placeholders, client names, scheduling language."""
     if situation == "send_zoom":
-        return strip_instruction_placeholders(body, keep_zoom=True).strip()
+        body = strip_instruction_placeholders(body, keep_zoom=True).strip()
+        return ensure_zoom_placeholder(body)
 
     clients = extract_case_study_clients(thread_history or [])
     keep_zoom = False

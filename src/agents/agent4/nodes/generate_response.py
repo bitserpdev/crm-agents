@@ -9,9 +9,12 @@ from utils.email_reply import (
     has_proposed_meeting_time,
     is_scheduling_request,
     polish_reply_body,
+    prospect_shared_availability,
     reply_has_unauthorized_scheduling,
+    requests_agent_availability,
     strip_quoted_reply,
     wants_more_info,
+    wants_to_schedule_call,
 )
 
 llm = get_llm(LLMFormat.JSON)
@@ -64,11 +67,15 @@ def validate_situation(situation: str, state: Agent4State) -> str:
         print(f"[agent4/classify] general_reply → {override} (no meeting scheduled yet)")
         return override
 
-    if situation == "ask_availability" and not scheduling and wants_more_info(reply):
+    if (
+        situation == "ask_availability"
+        and wants_more_info(reply)
+        and not wants_to_schedule_call(reply)
+    ):
         print("[agent4/classify] ask_availability → more_info (prospect asked for details first)")
         return "more_info"
 
-    if situation == "warm" and not scheduling and wants_more_info(reply):
+    if situation == "warm" and not scheduling and wants_more_info(reply) and not wants_to_schedule_call(reply):
         print("[agent4/classify] warm → more_info (substantive questions in reply)")
         return "more_info"
 
@@ -97,23 +104,22 @@ def classify_situation(state: Agent4State) -> str:
     sequence = state.get("sequence") or {}
 
     scheduling = is_scheduling_request(reply)
-    proposed_time = has_proposed_meeting_time(reply)
 
     # ── Rule-based fast path (do not trust LLM for clear cases) ──
-    if wants_more_info(reply) and not proposed_time and not scheduling:
-        print("[agent4/classify] Rule match → more_info (prospect asked for details)")
-        return "more_info"
-
-    if proposed_time:
-        print("[agent4/classify] Rule match → send_zoom (explicit date/time in reply)")
+    if prospect_shared_availability(reply):
+        print("[agent4/classify] Rule match → send_zoom (prospect shared their availability)")
         return "send_zoom"
 
-    if wants_more_info(reply) and not scheduling:
+    if wants_to_schedule_call(reply):
+        print("[agent4/classify] Rule match → ask_availability (prospect wants to schedule)")
+        return "ask_availability"
+
+    if wants_more_info(reply):
         print("[agent4/classify] Rule match → more_info (prospect asked for details)")
         return "more_info"
 
-    if scheduling and not proposed_time:
-        print("[agent4/classify] Rule match → ask_availability (scheduling request, no time yet)")
+    if scheduling:
+        print("[agent4/classify] Rule match → ask_availability (scheduling request)")
         return "ask_availability"
 
     thread_text = ""
@@ -188,18 +194,32 @@ def build_context(state: Agent4State) -> str:
             f"{', '.join(case_studies)}"
         )
 
+    if requests_agent_availability(prospect_reply):
+        ask_avail_instruction = (
+            "\n\nCRITICAL: The prospect AGREED to a call and asked YOU to share your availability. "
+            "Respond with open slots next week (e.g. Tuesday–Thursday, 10:00 AM–4:00 PM) OR ask "
+            "which day next week works best for them. "
+            "Do NOT re-pitch services, case studies, or client names — they already want to meet. "
+            "Do NOT ask how a call would help — they already explained their interest. "
+            "Under 80 words."
+        )
+    else:
+        ask_avail_instruction = (
+            "\n\nCRITICAL: No call has been scheduled yet. Do NOT suggest specific days "
+            "(e.g. Tuesday, Wednesday) unless the prospect mentioned them. Ask open-endedly "
+            "what days and times work for them. Mention you can share case studies on the call."
+        )
+
     # Situation-specific instructions injected into context
     instructions = {
-        "ask_availability": (
-            "\n\nCRITICAL: No call has been scheduled yet. Do NOT suggest specific days "
-            "(e.g. Tuesday, Wednesday) — the prospect did not mention any. Ask open-endedly "
-            "what days and times work for them. Mention you can share case studies on the call."
-        ),
+        "ask_availability": ask_avail_instruction,
         "send_zoom": (
-            "\n\nCRITICAL: The prospect proposed a specific date/time for a call. "
-            "Confirm the exact date and time they stated. Send the meeting link — put [ZOOM_LINK] "
-            "exactly where the link should go. Do NOT pitch services or case studies — "
-            "keep it short: confirm time, share link, express enthusiasm."
+            "\n\nCRITICAL: The prospect already shared when they are available for a call. "
+            "Confirm the exact day(s) and time window they stated (e.g. Tuesday or Wednesday afternoon). "
+            "Do NOT ask what days/times work — they already told you. "
+            "Send the meeting link — put [ZOOM_LINK] exactly where the link should go. "
+            "If they also asked for case studies or materials, say you will cover those on the call. "
+            "Keep it short: confirm availability, share link, express enthusiasm."
         ),
         "more_info": (
             f"\n\nCRITICAL: The prospect asked for more information about your services. "
@@ -236,14 +256,15 @@ def build_context(state: Agent4State) -> str:
 def get_fallback_body(situation: str, name: str) -> str:
     fallbacks = {
         "ask_availability": (
-            f"Hi {name},\n\nThank you for your interest — great to hear data governance "
-            f"is a priority for your team.\n\nI'd love to set up a quick call and share "
-            f"some relevant case studies. Could you confirm which days work best so I can "
-            f"send over a calendar invite?\n\nBest regards,\nBITS Global Consulting Team"
+            f"Hi {name},\n\nGreat — happy to set up a call.\n\n"
+            f"I'm available next week Tuesday through Thursday, 10:00 AM–4:00 PM. "
+            f"Which day and time work best for you? I'll send a calendar invite once confirmed.\n\n"
+            f"Best regards,\nBITS Global Consulting Team"
         ),
         "send_zoom": (
-            f"Hi {name},\n\nThank you — I've confirmed our call at the time you proposed. "
-            f"Here is the meeting link:\n\n[ZOOM_LINK]\n\n"
+            f"Hi {name},\n\nThank you — I've set up a call for the day and time you "
+            f"suggested. Here is the calendar link:\n\n[ZOOM_LINK]\n\n"
+            f"I'll walk through the Vodafone and DEWA case studies on our call.\n\n"
             f"Looking forward to speaking with you.\n\n"
             f"Best regards,\nBITS Global Consulting Team"
         ),
@@ -361,9 +382,18 @@ def generate_response_node(state: Agent4State) -> Agent4State:
     # If sanitization stripped a hallucinated meeting reply, use the situation fallback.
     polished = (state.get("reply_body") or "").strip()
     prospect_reply = clean_prospect_reply(state)
+    repitched_on_schedule = (
+        situation == "ask_availability"
+        and wants_to_schedule_call(prospect_reply)
+        and re.search(
+            r"(?i)how would a (?:brief )?call help|our approach helps|data governance services can help",
+            polished,
+        )
+    )
     needs_fallback = situation in ("more_info", "warm", "ask_availability") and (
         len(polished.split()) < 25
         or reply_has_unauthorized_scheduling(polished, prospect_reply, situation)
+        or repitched_on_schedule
     )
     if needs_fallback:
         fallback_situation = "more_info" if wants_more_info(prospect_reply) else situation
@@ -375,6 +405,12 @@ def generate_response_node(state: Agent4State) -> Agent4State:
             fallback_situation,
             state.get("thread_history", []),
         )
+
+    if situation == "send_zoom" and "[ZOOM_LINK]" not in (state.get("reply_body") or ""):
+        from utils.email_reply import ensure_zoom_placeholder
+
+        state["reply_body"] = ensure_zoom_placeholder(state.get("reply_body", ""))
+        print("[agent4/generate] Injected [ZOOM_LINK] placeholder for send_zoom")
 
     print(f"[agent4/generate] ✓ {state['reply_subject']} (situation={situation})")
     return state

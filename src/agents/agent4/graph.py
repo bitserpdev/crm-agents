@@ -6,6 +6,7 @@ from agents.agent4.nodes.load_thread import load_thread_node
 from agents.agent4.nodes.generate_response import generate_response_node
 from agents.agent4.nodes.create_meeting import create_meeting_node
 from agents.agent4.nodes.send_email import send_email_node
+from agents.agent4.nodes.schedule_followups import schedule_followups_node
 from agents.agent4.nodes.record import record_node
 from core.redis import get_redis
 
@@ -18,12 +19,14 @@ def build_agent4_graph():
     g.add_node("generate_response", generate_response_node)
     g.add_node("create_meeting", create_meeting_node)
     g.add_node("send_email", send_email_node)
+    g.add_node("schedule_followups", schedule_followups_node)
     g.add_node("record", record_node)
     g.set_entry_point("load_thread")
     g.add_edge("load_thread", "generate_response")
     g.add_edge("generate_response", "create_meeting")
     g.add_edge("create_meeting", "send_email")
-    g.add_edge("send_email", "record")
+    g.add_edge("send_email", "schedule_followups")
+    g.add_edge("schedule_followups", "record")
     g.add_edge("record", END)
     return g.compile()
 

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from core.database import get_conn, get_dict_cursor
-from agent4.state import Agent4State
+from agents.agent4.state import Agent4State
 
 FOLLOWUP_INTERVAL_DAYS = 3
 MAX_STEPS = 5
@@ -14,6 +14,8 @@ def schedule_followups_node(state: Agent4State) -> Agent4State:
     situation = state.get("call_situation", state["intent_label"])
     sequence  = state.get("sequence")
     now       = datetime.now(timezone.utc)
+    # UI filters (hot/warm/cold) use intent from Agent 3, not internal call_situation
+    last_intent = state.get("intent_label") or situation
 
     current_step       = (sequence or {}).get("current_step", 0)
     asked_availability = (sequence or {}).get("asked_availability", False)
@@ -64,13 +66,13 @@ def schedule_followups_node(state: Agent4State) -> Agent4State:
                 last_reply_at      = %s,
                 last_intent_label  = %s,
                 asked_availability = %s,
-                zoom_meeting_url   = COALESCE(%s, zoom_meeting_url),
+                teams_meeting_url  = COALESCE(%s, teams_meeting_url),
                 updated_at         = NOW()
             WHERE sequence_id = %s
             """,
             (
                 new_step, new_status, next_followup, now,
-                situation, new_asked_avail,
+                last_intent, new_asked_avail,
                 zoom_meeting,
                 sequence["sequence_id"],
             ),
@@ -85,7 +87,7 @@ def schedule_followups_node(state: Agent4State) -> Agent4State:
                 (campaign_id, contact_id, run_id,
                  original_response_id, current_step, max_steps,
                  status, next_followup_at, last_reply_at,
-                 last_intent_label, asked_availability, zoom_meeting_url)
+                 last_intent_label, asked_availability, teams_meeting_url)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING sequence_id
             """,
@@ -93,7 +95,7 @@ def schedule_followups_node(state: Agent4State) -> Agent4State:
                 state["campaign_id"], state["contact_id"], state["run_id"],
                 state["response_id"], new_step, MAX_STEPS,
                 new_status, next_followup, now,
-                situation, new_asked_avail,
+                last_intent, new_asked_avail,
                 zoom_meeting,
             ),
         )
@@ -105,7 +107,7 @@ def schedule_followups_node(state: Agent4State) -> Agent4State:
         "current_step":       new_step,
         "status":             new_status,
         "asked_availability": new_asked_avail,
-        "zoom_meeting_url":   zoom_meeting or (sequence or {}).get("zoom_meeting_url"),
+        "teams_meeting_url":  zoom_meeting or (sequence or {}).get("teams_meeting_url"),
     }
 
     # Save Zoom meeting record
