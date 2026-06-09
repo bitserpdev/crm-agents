@@ -139,8 +139,7 @@ class CrmRepository:
     def get_stats(self) -> dict:
         with get_db() as conn:
             cur = get_dict_cursor(conn)
-            cur.execute(
-                """
+            cur.execute("""
                 SELECT
                     (SELECT COUNT(*) FROM crm.crm_contacts)  AS total_contacts,
                     (SELECT COUNT(*) FROM crm.crm_leads)     AS total_leads,
@@ -155,8 +154,7 @@ class CrmRepository:
                     WHERE lifecycle_stage = 'subscriber')   AS subscribers,
                     (SELECT COUNT(*) FROM crm.crm_contact_scores
                     WHERE intent_score >= 0.7)              AS high_intent
-                """
-            )
+                """)
             row = cur.fetchone()
             cur.close()
             return dict(row)
@@ -167,12 +165,14 @@ class CrmRepository:
             try:
                 contact_id = contact_data.get("contact_id") or str(new_id())
                 company_id = self._upsert_company(cur, contact_data)
-                result     = self._upsert_contact(cur, contact_id, company_id, contact_data)
+                result = self._upsert_contact(cur, contact_id, company_id, contact_data)
 
                 if contact_data.get("intent_score") or contact_data.get("lead_score"):
                     self._upsert_scores(cur, result["contact_id"], contact_data)
 
-                self._insert_tags(cur, result["contact_id"], contact_data.get("tags", []))
+                self._insert_tags(
+                    cur, result["contact_id"], contact_data.get("tags", [])
+                )
 
                 conn.commit()
                 return dict(result)
@@ -217,7 +217,9 @@ class CrmRepository:
         )
         return company_id
 
-    def _upsert_contact(self, cur, contact_id: str, company_id: Optional[str], contact_data: dict) -> dict:
+    def _upsert_contact(
+        self, cur, contact_id: str, company_id: Optional[str], contact_data: dict
+    ) -> dict:
         email = contact_data.get("email")
 
         # Check if contact already exists
@@ -312,22 +314,26 @@ class CrmRepository:
 
         for tag in tags:
             if tag and len(tag) <= 80:
-                cur.execute(
-                    """
-                    INSERT INTO crm.crm_contact_tags
-                        (tag_id, contact_id, tag_name, tagged_by)
-                    VALUES (%s, %s, %s, 'csv-upload')
-                    ON CONFLICT (contact_id, tag_name) DO NOTHING
-                    """,
-                    (str(new_id()), contact_id, tag[:80]),
-                )
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO crm.crm_contact_tags
+                            (tag_id, contact_id, tag_name, tagged_by)
+                        VALUES (%s, %s, %s, 'csv-upload')
+                        ON CONFLICT (contact_id, tag_name) DO NOTHING
+                        """,
+                        (str(new_id()), contact_id, tag[:80]),
+                    )
+                except Exception as e:
+                    print(f"Failed to insert tag '{tag}' for contact {contact_id}: {e}")
+                    raise
 
     def bulk_add_contacts(self, contacts: list[dict]) -> dict:
         results = {
-            "total":    len(contacts),
-            "success":  0,
-            "failed":   0,
-            "errors":   [],
+            "total": len(contacts),
+            "success": 0,
+            "failed": 0,
+            "errors": [],
             "contacts": [],
         }
 
@@ -340,11 +346,13 @@ class CrmRepository:
                 results["contacts"].append(added)
             except Exception as e:
                 results["failed"] += 1
-                results["errors"].append({
-                    "row":   idx + 2,
-                    "email": contact.get("email", "Unknown"),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "row": idx + 2,
+                        "email": contact.get("email", "Unknown"),
+                        "error": str(e),
+                    }
+                )
 
         return results
 
