@@ -170,7 +170,9 @@ class SequenceRepository:
             "opened":    ["r.opened_at IS NOT NULL", "s.status = 'active'"],
             "fu1":       ["s.current_step = 1", "s.status = 'active'"],
             "fu2":       ["s.current_step = 2", "s.status = 'active'"],
-            "fu3plus":   ["s.current_step >= 3", "s.status = 'active'"],
+            "fu3":       ["s.current_step = 3", "s.status = 'active'"],
+            "fu4":       ["s.current_step = 4", "s.status = 'active'"],
+            "fu5":       ["s.current_step = 5", "s.status = 'active'"],
             "exhausted": ["s.status = 'exhausted'"],
         }
         filters += tab_filters.get(tab, ["s.status IN ('active', 'exhausted')"])

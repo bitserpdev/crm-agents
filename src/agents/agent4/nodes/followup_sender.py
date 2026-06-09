@@ -88,6 +88,7 @@ def send_due_followups():
         LEFT JOIN crm.crm_companies co ON co.company_id = c.company_id
         LEFT JOIN crm.crm_campaigns camp ON camp.campaign_id = s.campaign_id
         WHERE s.status = 'active'
+          AND s.last_reply_at IS NULL
           AND s.next_followup_at <= %s
           AND c.is_suppressed = FALSE
           AND c.email NOT LIKE '%%@placeholder.bits'

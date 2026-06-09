@@ -54,10 +54,15 @@ class ReplyService:
             cur = get_dict_cursor(conn)
             cur.execute(
                 """
-                SELECT DISTINCT campaign_id
-                FROM crm.crm_campaigns
-                WHERE campaign_type = 'email'
-                  AND campaign_status = 'draft'
+                SELECT DISTINCT cr.campaign_id
+                FROM crm.crm_campaign_runs cr
+                JOIN crm.crm_campaign_recipients r ON r.run_id = cr.run_id
+                WHERE r.delivery_status = 'sent'
+                UNION
+                SELECT DISTINCT camp.campaign_id
+                FROM crm.crm_campaigns camp
+                WHERE camp.campaign_type = 'email'
+                  AND camp.campaign_status IN ('draft', 'active', 'running')
                 """
             )
             rows = cur.fetchall()

@@ -10,7 +10,7 @@ const API = axios.create({ baseURL: import.meta.env.VITE_API_URL || "http://loca
 const getConversations = (p) => API.get("/api/campaigns/sequences/conversations", { params: p });
 const getStats = (p) => API.get("/api/campaigns/sequences/conversations/stats", { params: p });
 const getThread = (id) => API.get(`/api/campaigns/sequences/conversations/${id}/thread`);
-const getCampaigns = () => API.get("/api/campaigns/email");
+const getCampaigns = () => API.get("/api/campaigns/emails");
 
 const INTENT = {
   hot: { color: "bg-green-900/50 text-green-300 border-green-700", icon: Flame, label: "Hot" },

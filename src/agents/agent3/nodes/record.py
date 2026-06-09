@@ -40,6 +40,11 @@ def record_node(state: Agent3State) -> Agent3State:
                     "run_id": run_id,
                     "sent": sent,
                     "failed": failed,
+                    "contact_ids": [
+                        (e.get("contact") or {}).get("id")
+                        or (e.get("contact") or {}).get("contact_id")
+                        for e in state.get("sent", [])
+                    ],
                     "errors": state["errors"][:3],
                 }
             ),

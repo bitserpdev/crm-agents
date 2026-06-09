@@ -154,8 +154,7 @@ def _fetch_contacts(cur, campaign: dict, campaign_id: str) -> list:
         values,
     )
 
-    results = [[dict(r) for r in cur.fetchall()][-1]]
-    print("results => ", results)
+    results = [dict(r) for r in cur.fetchall()]
     print(f"[agent3/fetch] Contacts matched: {len(results)}")
     return results
 

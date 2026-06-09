@@ -11,6 +11,12 @@ from services.reply import reply_service
 
 scheduler = BackgroundScheduler()
 
+# ── Agent job intervals (tune here) ───────────────────────────────────────────
+AGENT3_INBOX_SCAN_SECONDS = 120      # scan IMAP inbox every 2 minutes
+AGENT4_REPLY_WORKER_SECONDS = 30     # process reply queue every 30 seconds
+AGENT4_FOLLOWUP_INTERVAL_HOURS = 1   # send due follow-ups every hour
+RETRY_QUEUE_INTERVAL_MINUTES = 30    # retry failed campaign sends every 30 min
+
 
 # ── Wrappers — scheduler only knows when, services know how ──────────────────
 
@@ -82,7 +88,7 @@ def start():
     scheduler.add_job(
         _process_retry_queue,
         "interval",
-        minutes=60,
+        minutes=RETRY_QUEUE_INTERVAL_MINUTES,
         id="retry_queue_consumer",
         max_instances=1,
         coalesce=True,
@@ -90,7 +96,7 @@ def start():
     scheduler.add_job(
         _run_agent4_worker,
         "interval",
-        minutes=60,
+        seconds=AGENT4_REPLY_WORKER_SECONDS,
         id="agent4_reply_worker",
         max_instances=1,
         coalesce=True,
@@ -98,7 +104,7 @@ def start():
     scheduler.add_job(
         _send_due_followups,
         "interval",
-        minutes=60,
+        hours=AGENT4_FOLLOWUP_INTERVAL_HOURS,
         id="agent4_followup_sender",
         max_instances=1,
         coalesce=True,
@@ -106,7 +112,7 @@ def start():
     scheduler.add_job(
         _monitor_campaign_replies,
         "interval",
-        seconds=100000,
+        seconds=AGENT3_INBOX_SCAN_SECONDS,
         id="agent3_reply_monitor",
         max_instances=1,
         coalesce=True,
@@ -119,7 +125,13 @@ def start():
     )
 
     scheduler.start()
-    logger.info("[scheduler] Started", campaigns=len(campaigns))
+    logger.info(
+        "[scheduler] Started",
+        campaigns=len(campaigns),
+        agent3_scan_sec=AGENT3_INBOX_SCAN_SECONDS,
+        agent4_reply_sec=AGENT4_REPLY_WORKER_SECONDS,
+        followup_hours=AGENT4_FOLLOWUP_INTERVAL_HOURS,
+    )
 
     try:
         while True:

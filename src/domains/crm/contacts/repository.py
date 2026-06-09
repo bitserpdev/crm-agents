@@ -33,7 +33,6 @@ class CrmRepository:
 
             where = f"WHERE {' AND '.join(filters)}" if filters else ""
             count_vals = values[:]
-            values += [limit, offset]
 
             cur.execute(
                 f"""
@@ -53,7 +52,7 @@ class CrmRepository:
                 ORDER BY COALESCE(s.overall_score, 0) DESC, c.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
-                values,
+                values + [limit, offset],
             )
             rows = cur.fetchall()
 
@@ -97,7 +96,7 @@ class CrmRepository:
     ) -> list[dict]:
 
         with get_db() as conn:
-            conn = get_dict_cursor(conn)
+            cur = get_dict_cursor(conn)  # fixed: was overwriting conn
 
             filters, values = [], []
 
@@ -112,28 +111,26 @@ class CrmRepository:
                 values.append(status)
 
             where = f"WHERE {' AND '.join(filters)}" if filters else ""
-            values += [limit, offset]
 
-            cur = get_dict_cursor(conn)
             cur.execute(
                 f"""
-                    SELECT
-                        l.lead_id, l.lead_status, l.lead_score,
-                        l.source_platform, l.source_detail,
-                        l.initial_message, l.created_at,
-                        l.estimated_value, l.currency,
-                        c.first_name, c.last_name, c.job_title, c.email,
-                        co.company_name,
-                        s.intent_score, s.overall_score
-                    FROM crm.crm_leads l
-                    JOIN crm.crm_contacts c ON c.contact_id = l.contact_id
-                    LEFT JOIN crm.crm_companies co ON co.company_id = l.company_id
-                    LEFT JOIN crm.crm_contact_scores s ON s.contact_id = c.contact_id
-                    {where}
-                    ORDER BY COALESCE(l.lead_score, 0) DESC, l.created_at DESC
-                    LIMIT %s OFFSET %s
-                    """,
-                values,
+                SELECT
+                    l.lead_id, l.lead_status, l.lead_score,
+                    l.source_platform, l.source_detail,
+                    l.initial_message, l.created_at,
+                    l.estimated_value, l.currency,
+                    c.first_name, c.last_name, c.job_title, c.email,
+                    co.company_name,
+                    s.intent_score, s.overall_score
+                FROM crm.crm_leads l
+                JOIN crm.crm_contacts c ON c.contact_id = l.contact_id
+                LEFT JOIN crm.crm_companies co ON co.company_id = l.company_id
+                LEFT JOIN crm.crm_contact_scores s ON s.contact_id = c.contact_id
+                {where}
+                ORDER BY COALESCE(l.lead_score, 0) DESC, l.created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                values + [limit, offset],
             )
             rows = cur.fetchall()
             cur.close()
@@ -168,185 +165,186 @@ class CrmRepository:
         with get_db() as conn:
             cur = get_dict_cursor(conn)
             try:
-                contact_id = contact_data.get("contact_id", str(new_id()))
-                company_id = None
+                contact_id = contact_data.get("contact_id") or str(new_id())
+                company_id = self._upsert_company(cur, contact_data)
+                result     = self._upsert_contact(cur, contact_id, company_id, contact_data)
 
-                company_name = contact_data.get("company")
-
-                if company_name:
-                    # Check if company exists
-                    cur.execute(
-                        """
-                        SELECT company_id FROM crm.crm_companies 
-                        WHERE company_name ILIKE %s
-                    """,
-                        (company_name,),
-                    )
-                    existing_company = cur.fetchone()
-
-                    if existing_company:
-                        company_id = existing_company["company_id"]
-                    else:
-                        # Create new company
-                        company_id = str(new_id())
-
-                        try:
-                            cur.execute(
-                                """
-                                INSERT INTO crm.crm_companies (
-                                    company_id, company_name, city, country, 
-                                    industry
-                                ) VALUES (%s, %s, %s, %s, %s)
-                            """,
-                                (
-                                    company_id,
-                                    company_name,
-                                    contact_data.get("city"),
-                                    contact_data.get("country"),
-                                    contact_data.get("industry"),
-                                ),
-                            )
-
-                        except Exception as e:
-                            logger.error(
-                                f"Company INSERT failed: {type(e).__name__}: {e}"
-                            )
-                            raise
-
-                try:
-                    # Insert contact
-                    cur.execute(
-                        """
-                        INSERT INTO crm.crm_contacts (
-                            contact_id, 
-                            company_id, 
-                            first_name, 
-                            last_name,
-                            email, 
-                            phone, 
-                            job_title, 
-                            linkedin_url,
-                            contact_type, 
-                            lifecycle_stage,
-                            source_platform, 
-                            dedup_key, 
-                            created_by_agent
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (email) DO UPDATE SET
-                            first_name = EXCLUDED.first_name,
-                            last_name = EXCLUDED.last_name,
-                            job_title = EXCLUDED.job_title,
-                            phone = EXCLUDED.phone,
-                            company_id = EXCLUDED.company_id,
-                            updated_at = NOW()
-                        RETURNING contact_id, first_name, last_name, email
-                    """,
-                        (
-                            contact_id,
-                            company_id,
-                            contact_data.get("first_name"),
-                            contact_data.get("last_name"),
-                            contact_data.get("email"),
-                            contact_data.get("phone"),
-                            contact_data.get("job_title"),
-                            contact_data.get("linkedin_url"),
-                            contact_data.get("contact_type", "prospect"),
-                            contact_data.get("lifecycle_stage", "subscriber"),
-                            "manual",
-                            f"csv_{contact_data.get('email')}",
-                            "csv-upload",
-                        ),
-                    )
-
-                except Exception as e:
-                    logger.error(f"Company INSERT failed: {type(e).__name__}: {e}")
-                    raise
-
-                result = cur.fetchone()
-
-                # Add scores if provided
                 if contact_data.get("intent_score") or contact_data.get("lead_score"):
-                    cur.execute(
-                        """
-                        INSERT INTO crm.crm_contact_scores (
-                            score_id, contact_id, lead_score,
-                            intent_score, overall_score,
-                            score_breakdown, scored_by_agent, last_scored_at
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
-                        ON CONFLICT (contact_id) DO UPDATE SET
-                            intent_score = EXCLUDED.intent_score,
-                            lead_score = EXCLUDED.lead_score,
-                            overall_score = EXCLUDED.overall_score,
-                            updated_at = NOW()
-                    """,
-                        (
-                            str(new_id()),
-                            result["contact_id"],
-                            contact_data.get("lead_score", 50),
-                            contact_data.get("intent_score", 0.5),
-                            contact_data.get("overall_score", 50),
-                            Json(contact_data.get("score_breakdown", {})),
-                            "csv-upload",
-                        ),
-                    )
+                    self._upsert_scores(cur, result["contact_id"], contact_data)
 
-                # Add tags if provided
-                tags = contact_data.get("tags", [])
-                if isinstance(tags, str):
-                    tags = [t.strip() for t in tags.split(",") if t.strip()]
-
-                for tag in tags:
-                    if tag and len(tag) <= 80:
-                        cur.execute(
-                            """
-                            INSERT INTO crm.crm_contact_tags
-                                (tag_id, contact_id, tag_name, tagged_by)
-                            VALUES (%s, %s, %s, 'csv-upload')
-                            ON CONFLICT (contact_id, tag_name) DO NOTHING
-                        """,
-                            (str(new_id()), result["contact_id"], tag[:80]),
-                        )
+                self._insert_tags(cur, result["contact_id"], contact_data.get("tags", []))
 
                 conn.commit()
-
                 return dict(result)
 
             except Exception as e:
                 conn.rollback()
-                raise e
+                raise
             finally:
                 cur.close()
 
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _upsert_company(self, cur, contact_data: dict) -> Optional[str]:
+        company_name = contact_data.get("company")
+        if not company_name:
+            return None
+
+        cur.execute(
+            "SELECT company_id FROM crm.crm_companies WHERE company_name ILIKE %s",
+            (company_name,),
+        )
+        row = cur.fetchone()
+        if row:
+            return row["company_id"]
+
+        company_id = str(new_id())
+        cur.execute(
+            """
+            INSERT INTO crm.crm_companies (
+                company_id, company_name, city, country, industry
+            ) VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                company_id,
+                company_name,
+                contact_data.get("city"),
+                contact_data.get("country"),
+                contact_data.get("industry"),
+            ),
+        )
+        return company_id
+
+    def _upsert_contact(self, cur, contact_id: str, company_id: Optional[str], contact_data: dict) -> dict:
+        email = contact_data.get("email")
+
+        # Check if contact already exists
+        cur.execute(
+            "SELECT contact_id FROM crm.crm_contacts WHERE email = %s",
+            (email,),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute(
+                """
+                UPDATE crm.crm_contacts SET
+                    first_name  = %s,
+                    last_name   = %s,
+                    job_title   = %s,
+                    phone       = %s,
+                    company_id  = %s,
+                    linkedin_url = %s,
+                    updated_at  = NOW()
+                WHERE email = %s
+                RETURNING contact_id, first_name, last_name, email
+                """,
+                (
+                    contact_data.get("first_name"),
+                    contact_data.get("last_name"),
+                    contact_data.get("job_title"),
+                    contact_data.get("phone"),
+                    company_id,
+                    contact_data.get("linkedin_url"),
+                    email,
+                ),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO crm.crm_contacts (
+                    contact_id, company_id, first_name, last_name,
+                    email, phone, job_title, linkedin_url,
+                    contact_type, lifecycle_stage,
+                    source_platform, dedup_key, created_by_agent
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING contact_id, first_name, last_name, email
+                """,
+                (
+                    contact_id,
+                    company_id,
+                    contact_data.get("first_name"),
+                    contact_data.get("last_name"),
+                    email,
+                    contact_data.get("phone"),
+                    contact_data.get("job_title"),
+                    contact_data.get("linkedin_url"),
+                    contact_data.get("contact_type", "prospect"),
+                    contact_data.get("lifecycle_stage", "subscriber"),
+                    "csv-upload",
+                    f"csv_{email}",
+                    "csv-upload",
+                ),
+            )
+
+        return cur.fetchone()
+
+    def _upsert_scores(self, cur, contact_id: str, contact_data: dict) -> None:
+        cur.execute(
+            """
+            INSERT INTO crm.crm_contact_scores (
+                score_id, contact_id, lead_score,
+                intent_score, overall_score,
+                score_breakdown, scored_by_agent, last_scored_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (contact_id) DO UPDATE SET
+                intent_score  = EXCLUDED.intent_score,
+                lead_score    = EXCLUDED.lead_score,
+                overall_score = EXCLUDED.overall_score,
+                updated_at    = NOW()
+            """,
+            (
+                str(new_id()),
+                contact_id,
+                contact_data.get("lead_score", 50),
+                contact_data.get("intent_score", 0.5),
+                contact_data.get("overall_score", 50),
+                Json(contact_data.get("score_breakdown", {})),
+                "csv-upload",
+            ),
+        )
+
+    def _insert_tags(self, cur, contact_id: str, tags) -> None:
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
+
+        for tag in tags:
+            if tag and len(tag) <= 80:
+                cur.execute(
+                    """
+                    INSERT INTO crm.crm_contact_tags
+                        (tag_id, contact_id, tag_name, tagged_by)
+                    VALUES (%s, %s, %s, 'csv-upload')
+                    ON CONFLICT (contact_id, tag_name) DO NOTHING
+                    """,
+                    (str(new_id()), contact_id, tag[:80]),
+                )
+
     def bulk_add_contacts(self, contacts: list[dict]) -> dict:
-        """Bulk add multiple contacts with error handling"""
         results = {
-            "total": len(contacts),
-            "success": 0,
-            "failed": 0,
-            "errors": [],
+            "total":    len(contacts),
+            "success":  0,
+            "failed":   0,
+            "errors":   [],
             "contacts": [],
         }
 
         for idx, contact in enumerate(contacts):
             try:
-                # Validate required fields
                 if not contact.get("email"):
                     raise ValueError("Email is required")
-
-                # Add contact
                 added = self.add_contact(contact)
                 results["success"] += 1
                 results["contacts"].append(added)
-
             except Exception as e:
                 results["failed"] += 1
-                results["errors"].append(
-                    {
-                        "row": idx + 2,  # +2 for header row (1-indexed + header)
-                        "email": contact.get("email", "Unknown"),
-                        "error": str(e),
-                    }
-                )
+                results["errors"].append({
+                    "row":   idx + 2,
+                    "email": contact.get("email", "Unknown"),
+                    "error": str(e),
+                })
 
         return results
 

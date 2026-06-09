@@ -104,7 +104,12 @@ def run_agent4():
 
 @app.post("/dev/backfill-conversations")
 def backfill_conversations():
-    """Create conversation sequence rows for past replies missing from the UI."""
-    from agents.agent4.backfill_sequences import backfill_conversation_sequences
+    """Create conversation + follow-up sequence rows for past data missing from the UI."""
+    from agents.agent4.backfill_sequences import (
+        backfill_conversation_sequences,
+        backfill_followup_sequences,
+    )
 
-    return backfill_conversation_sequences()
+    conversations = backfill_conversation_sequences()
+    followups = backfill_followup_sequences()
+    return {"conversations": conversations, "followups": followups}

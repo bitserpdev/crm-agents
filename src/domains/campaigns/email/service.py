@@ -65,6 +65,21 @@ class CampaignService:
 
             if success:
                 sent += 1
+                try:
+                    from agents.agent4.seed_sequences import seed_outbound_sequence
+
+                    seed_outbound_sequence(
+                        request.campaign_id,
+                        contact_id,
+                        subject=self._personalize(request.subject, ctx),
+                        body=body_text,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "[email.service] Follow-up sequence seed failed",
+                        contact_id=contact_id,
+                        error=str(e),
+                    )
             else:
                 failed += 1
                 failed_emails.append(contact["email"])
