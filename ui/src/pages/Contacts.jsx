@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
-import { getCrmContacts, getCrmContact } from "../api/client";
-import { Search, User, X, ExternalLink, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { getCrmContacts, getCrmContact, uploadContactsCSV } from "../api/client";
+import { Search, User, X, ExternalLink, RefreshCw, ChevronLeft, ChevronRight, Upload, Download, AlertCircle, CheckCircle, Loader } from "lucide-react";
 
 const STAGE_COLORS = {
   subscriber:  "bg-gray-800 text-gray-400",
@@ -19,6 +19,186 @@ function ScoreBadge({ score, size = "sm" }) {
     <span className={`font-bold font-mono rounded px-1.5 py-0.5 ${size === "lg" ? "text-base" : "text-xs"} ${color}`}>
       {score ?? "—"}
     </span>
+  );
+}
+
+function UploadModal({ isOpen, onClose, onUpload, campaignId }) {
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState(null);
+  const fileInputRef = useRef(null);
+
+  if (!isOpen) return null;
+
+  const handleUpload = async () => {
+    if (!file) return;
+    
+    setUploading(true);
+    try {
+      const response = await uploadContactsCSV(file);
+      setResult(response.data);
+      if (response.data.success) {
+        setTimeout(() => {
+          onUpload();
+          onClose();
+          setFile(null);
+          setResult(null);
+        }, 2000);
+      }
+    } catch (error) {
+      console.log("error => ", error)
+      setResult({ error: error.response?.data?.detail || "Upload failed" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const csvContent = "email,first_name,last_name,phone,company,job_title,city,country\njohn.doe@example.com,John,Doe,+1234567890,Acme Corp,CEO,New York,USA\njane.smith@example.com,Jane,Smith,+1234567891,Tech Solutions,CTO,San Francisco,USA";
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "contacts_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+          <h3 className="text-lg font-semibold text-white">Upload Contacts (CSV)</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="p-6 space-y-4">
+          <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3">
+            <p className="text-xs text-blue-300 mb-2">📋 CSV Requirements:</p>
+            <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
+              <li><span className="text-blue-300">email</span> (required) - Contact's email address</li>
+              <li><span className="text-gray-400">first_name, last_name</span> - Contact's name</li>
+              <li><span className="text-gray-400">phone, company, job_title</span> - Contact details</li>
+              <li><span className="text-gray-400">city, country</span> - Location information</li>
+            </ul>
+            <button 
+              onClick={downloadTemplate}
+              className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+            >
+              <Download size={12} /> Download template CSV
+            </button>
+          </div>
+
+          <div 
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+              file ? "border-green-500 bg-green-900/10" : "border-gray-700 hover:border-indigo-500"
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={(e) => setFile(e.target.files[0])}
+              className="hidden"
+            />
+            {!file ? (
+              <>
+                <Upload className="mx-auto mb-3 text-gray-500" size={40} />
+                <p className="text-sm text-gray-400 mb-2">Drag & drop or click to upload CSV</p>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm transition-colors"
+                >
+                  Select File
+                </button>
+              </>
+            ) : (
+              <>
+                <CheckCircle className="mx-auto mb-3 text-green-500" size={40} />
+                <p className="text-sm text-green-400 mb-1">{file.name}</p>
+                <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(2)} KB</p>
+                <button
+                  onClick={() => setFile(null)}
+                  className="mt-3 text-xs text-red-400 hover:text-red-300"
+                >
+                  Remove
+                </button>
+              </>
+            )}
+          </div>
+
+          {result && (
+            <div className={`rounded-lg p-3 ${
+              result.error ? "bg-red-900/20 border border-red-800" : "bg-green-900/20 border border-green-800"
+            }`}>
+              {result.error ? (
+                <div className="flex items-start gap-2">
+                  <AlertCircle size={16} className="text-red-400 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-red-400 font-medium">Upload Failed</p>
+                    <p className="text-xs text-red-300 mt-1">{result.error}</p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <p className="text-sm text-green-400 font-medium">Upload Complete!</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-gray-800 rounded p-2">
+                      <p className="text-gray-500">Total</p>
+                      <p className="text-white font-semibold">{result.data?.total || 0}</p>
+                    </div>
+                    <div className="bg-gray-800 rounded p-2">
+                      <p className="text-green-400">Success</p>
+                      <p className="text-white font-semibold">{result.data?.success || 0}</p>
+                    </div>
+                    {result.data?.failed > 0 && (
+                      <div className="col-span-2 bg-red-900/20 rounded p-2 mt-1">
+                        <p className="text-red-400 text-xs">Failed: {result.data.failed}</p>
+                        {result.data.errors?.slice(0, 3).map((err, i) => (
+                          <p key={i} className="text-red-300 text-xs mt-1">Row {err.row}: {err.error}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpload}
+              disabled={!file || uploading}
+              className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {uploading ? (
+                <>
+                  <Loader size={16} className="animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload size={16} />
+                  Upload Contacts
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -120,6 +300,7 @@ export default function Contacts() {
   const [stage, setStage]         = useState("");
   const [offset, setOffset]       = useState(0);
   const [selectedId, setSelectedId] = useState(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const limit = 20;
 
   const load = useCallback(() => {
@@ -139,9 +320,17 @@ export default function Contacts() {
           <h2 className="text-2xl font-bold text-white">Contacts</h2>
           <p className="text-sm text-gray-500 mt-0.5">Structured contacts promoted from landing zone · {total} total</p>
         </div>
-        <button onClick={load} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg text-sm transition-colors">
-          <RefreshCw size={14}/> Refresh
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setShowUploadModal(true)} 
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            <Upload size={14}/> Upload CSV
+          </button>
+          <button onClick={load} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg text-sm transition-colors">
+            <RefreshCw size={14}/> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -238,7 +427,17 @@ export default function Contacts() {
           </div>
         )}
       </div>
+      
       <ContactDrawer contactId={selectedId} onClose={() => setSelectedId(null)}/>
+      <UploadModal 
+        isOpen={showUploadModal}
+        onClose={() => {
+          setShowUploadModal(false);
+          load(); // Reload contacts after closing
+        }}
+        onUpload={load}
+        campaignId="default-campaign-id" // Replace with actual campaign ID from props or context
+      />
     </div>
   );
 }

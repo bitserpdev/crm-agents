@@ -103,6 +103,7 @@ class EmailCampaignRepository:
     # ── Send / Preview ────────────────────────────────────────────────────────
 
     def get_contacts_for_send(self, contact_ids: list) -> list[dict]:
+    
         with get_db() as conn:
             cur = get_dict_cursor(conn)
             try:
@@ -112,7 +113,7 @@ class EmailCampaignRepository:
                         c.last_name, c.job_title, co.company_name
                     FROM crm.crm_contacts c
                     LEFT JOIN crm.crm_companies co ON co.company_id = c.company_id
-                    WHERE c.contact_id = ANY(%s)
+                    WHERE c.contact_id = ANY(%s::uuid[])
                 """,
                     (contact_ids,),
                 )
@@ -237,6 +238,30 @@ class EmailCampaignRepository:
                 )
             finally:
                 cur.close()
+
+    def preview_contacts(self, campaign_id: str) -> dict:
+        with get_db() as conn:
+            cur = get_dict_cursor(conn)
+            cur.execute(
+                """
+                SELECT c.contact_id, c.first_name, c.last_name,
+                    c.email, c.job_title, co.company_name,
+                    cs.overall_score
+                FROM crm.crm_contacts c
+                LEFT JOIN crm.crm_companies co ON co.company_id = c.company_id
+                LEFT JOIN crm.crm_contact_scores cs ON cs.contact_id = c.contact_id
+                JOIN crm.crm_campaign_recipients r ON r.contact_id = c.contact_id
+                JOIN crm.crm_campaign_runs cr ON cr.run_id = r.run_id
+                WHERE cr.campaign_id = %s
+                AND c.is_suppressed = FALSE
+                ORDER BY cs.overall_score DESC NULLS LAST
+                LIMIT 50
+                """,
+                (campaign_id,),
+            )
+            rows = cur.fetchall()
+            cur.close()
+        return {"contacts": [dict(r) for r in rows], "total": len(rows)}
 
 
 # Module-level singleton

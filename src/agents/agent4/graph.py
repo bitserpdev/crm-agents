@@ -31,16 +31,27 @@ def build_agent4_graph():
 def run_agent4():
     """Entry point for scheduler – creates initial state and runs the graph once."""
 
+    print(f"[DEBUG] Agent4 STARTED - Checking queue")
     # Get queue length
     queue_len = r.llen("op:reply_queue")
+    print(f"[DEBUG] Agent4 - Queue length: {queue_len}")
+
     if queue_len == 0:
         return {"run_status": "skipped"}
 
-    # Peek at the next item
-    item = r.lindex("op:reply_queue", 0)
+    all_items = r.lrange("op:reply_queue", 0, -1)
+    print(f"[DEBUG] Agent4 - All items: {all_items}")
+
+    item = r.lpop("op:reply_queue")
+    print(f"[DEBUG] Agent4 - Popped item: {item}")
+
+    print(f"[DEBUG] Item type: {type(item)}")
+    print(f"[DEBUG] Item value: {item}")
+
     if not item:
-        r.lpop("op:reply_queue")  # Remove empty item
+        print(f"[DEBUG] Agent4 - Item was None")
         return {"run_status": "skipped"}
+
 
     try:
         data = json.loads(item)
@@ -59,33 +70,46 @@ def run_agent4():
         r.lpop("op:reply_queue")
         return {"run_status": "skipped"}
 
-    # Check if response exists in database
+    # Check response exists and was not already handled by Agent 4
     import psycopg2
+    from psycopg2.extras import RealDictCursor
+    from agents.agent4.processed import agent4_already_replied
 
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
         "SELECT 1 FROM crm.crm_campaign_responses WHERE response_id = %s",
         (data["response_id"],),
     )
     exists = cur.fetchone()
-    cur.close()
-    conn.close()
 
     if not exists:
+        cur.close()
+        conn.close()
         print(
             f"[agent4] Response {data['response_id']} not found in database, removing from queue"
         )
-        r.lpop("op:reply_queue")
         return {"run_status": "skipped"}
 
-    # Check if already processed
-    if data.get("queued_for_agent4") or data.get("processed"):
-        print(
-            f"[agent4] Response {data['response_id']} already processed, removing from queue"
-        )
-        r.lpop("op:reply_queue")
+    if agent4_already_replied(cur, data["response_id"]):
+        cur.close()
+        conn.close()
+        print(f"[agent4] Response {data['response_id']} already handled — skipping")
         return {"run_status": "skipped"}
+
+    cur.execute(
+        "SELECT intent_label FROM crm.crm_campaign_responses WHERE response_id = %s",
+        (data["response_id"],),
+    )
+    intent_row = cur.fetchone()
+    if intent_row and intent_row.get("intent_label") == "out_of_office":
+        cur.close()
+        conn.close()
+        print(f"[agent4] Skipping out-of-office response {data['response_id']}")
+        return {"run_status": "skipped"}
+
+    cur.close()
+    conn.close()
 
     from agents.agent4.state import Agent4State
 

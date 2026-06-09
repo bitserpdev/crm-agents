@@ -1,6 +1,6 @@
 import { Mail, Play, Eye, TrendingUp, Users, Edit3 } from "lucide-react";
 
-export default function EmailCampaignCard({ campaign, onTrigger, onPreviewContacts, onCustomize, onOpenDetail, onLoadPreview, onEdit, onDelete, onConnectOutlook, isRunning }) {
+export default function EmailCampaignCard({ campaign, onTrigger, onPreviewContacts, onCustomize, onOpenDetail, onLoadPreview, onEdit, onDelete, isRunning }) {
     return (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors">
             {/* Card header */}
@@ -24,7 +24,6 @@ export default function EmailCampaignCard({ campaign, onTrigger, onPreviewContac
                 {[
                     ["Sent", campaign.total_sent || 0, "text-white"],
                     ["Runs", campaign.run_count || 0, "text-indigo-400"],
-                    ["Score", `${campaign.filter_min_score || 0}-${campaign.filter_max_score || 100}`, "text-yellow-400"],
                     ["Stage", campaign.filter_stage || "all", "text-gray-400"],
                 ].map(([label, val, color]) => (
                     <div key={label} className="bg-gray-800 rounded-lg p-2 text-center">
@@ -80,13 +79,6 @@ export default function EmailCampaignCard({ campaign, onTrigger, onPreviewContac
                     className="flex items-center gap-1.5 bg-red-800 hover:bg-red-700 px-3 py-1.5 rounded-lg text-xs transition-colors">
                     🗑️ Delete
                 </button>
-
-                {!campaign.azure_token && (
-                    <button onClick={() => onConnectOutlook(campaign.campaign_id)}
-                        className="flex items-center gap-1.5 bg-blue-800 hover:bg-blue-700 px-3 py-1.5 rounded-lg text-xs transition-colors">
-                        <Mail size={11} /> Connect Outlook
-                    </button>
-                )}
             </div>
         </div>
     );

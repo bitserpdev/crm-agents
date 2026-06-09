@@ -82,7 +82,7 @@ def load_thread_node(state: Agent4State) -> Agent4State:
         print(
             f"[agent4/load_thread] Existing sequence: status={seq['status']} "
             f"asked_avail={seq['asked_availability']} "
-            f"has_zoom={bool(seq['zoom_meeting_url'])}"
+            f"has_zoom={bool(seq.get('teams_meeting_url'))}"
         )
 
     # Load full thread history

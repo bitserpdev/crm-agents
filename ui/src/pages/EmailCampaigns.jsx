@@ -20,10 +20,10 @@ const createCampaign = (d) => API.post("/api/campaigns/emails", d);
 const updateCampaign = (id, d) => API.put(`/api/campaigns/emails/${id}`, d);
 const deleteCampaign = (id) => API.delete(`/api/campaigns/emails/${id}`);
 const triggerCampaign = (id, sel) => API.post(`/api/campaigns/${id}/trigger`, { selected_contacts: sel });
-const previewContacts = (id, filters) => API.post(`/api/campaigns/${id}/preview-contacts`, filters);
+const previewContacts = (id, filters) => API.post(`/api/campaigns/emails/${id}/preview-contacts`, filters);
 const startPreview = (id, cid) => API.post(`/api/campaigns/emails/${id}/preview/start`, { contact_id: cid }, { timeout: 10000 });
 const pollPreview = (jobId) => API.get(`/api/campaigns/emails/preview/job/${jobId}`, { timeout: 10000 });
-const sendCustomized = (data) => API.post("/api/campaigns/emails/send-customized", data);
+const sendCustomizedEmail = (data) => API.post("/api/campaigns/emails/send-customized", data);
 const getRuns = (id) => API.get(`/api/campaigns/runs/campaign/${id}`);
 const getRecipients = (runId) => API.get(`/api/campaigns/emails/runs/${runId}/recipients`);
 const getReplies = (id) => API.get(`/api/campaigns/emails/replies`, { params: { campaign_id: id } });
@@ -147,7 +147,8 @@ export default function EmailCampaigns() {
             setCustomizeLoading(false)
             setEmailTemplate({
               subject: data.email?.subject || "",
-              body: data.email?.text || data.email?.html || "",
+              body: data.email?.text || "",
+              htmlBody: data.email?.html || "",
               contact: data.contact,
               job_id: job_id
             });
@@ -193,7 +194,6 @@ export default function EmailCampaigns() {
         html_body: template.htmlBody || template.body.replace(/\n/g, '<br>')
       });
 
-      console.log("Send response:", response);
       flash(`Email sent to ${response.data?.sent || savedContactIds.length} contacts!`, "ok");
 
       // Close modal and reset
@@ -252,10 +252,6 @@ export default function EmailCampaigns() {
     setPreviewContactsModal(null);  // Close modal after save
   };
 
-  const connectOutlook = (id) => {
-    window.location.href = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/agent3/auth/${id}/start`;
-  };
-
   return (
     <div className="p-6">
       {/* Header */}
@@ -265,7 +261,7 @@ export default function EmailCampaigns() {
             <Mail size={22} className="text-indigo-400" /> Email Campaigns
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            AI-personalized outreach · powered by llama3.2 · sent via Microsoft 365
+            AI-personalized outreach · powered by llama3.2 · sent via Zoom
           </p>
         </div>
         <div className="flex gap-2">
@@ -313,7 +309,6 @@ export default function EmailCampaigns() {
               onLoadPreview={handleLoadPreview}
               onEdit={setEditTarget}
               onDelete={handleDeleteCampaign}
-              onConnectOutlook={connectOutlook}
               isRunning={running[c.campaign_id]}
             />
           ))}

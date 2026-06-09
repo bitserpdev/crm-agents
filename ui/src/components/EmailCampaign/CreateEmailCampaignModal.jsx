@@ -11,7 +11,6 @@ export default function CreateEmailCampaignModal({ isOpen, onClose, onCreate }) 
   const [form, setForm] = useState({
     campaign_name: "", service_description: "", from_address: "",
     filter_region: "", filter_industry: "", filter_company_size: "",
-    filter_min_score: 0, filter_max_score: 100,
     filter_stage: "", scheduled_at: "",
   });
 
@@ -72,12 +71,6 @@ export default function CreateEmailCampaignModal({ isOpen, onClose, onCreate }) 
             </Field>
             <Field label="Lifecycle Stage" hint="Filter by CRM stage">
               <Select value={form.filter_stage} onChange={v => setForm(f => ({ ...f, filter_stage: v }))} options={STAGES} placeholder="Any stage" />
-            </Field>
-            <Field label="Minimum Score (0-100)" hint="Minimum lead score">
-              <Input type="number" value={form.filter_min_score} onChange={v => setForm(f => ({ ...f, filter_min_score: v }))} placeholder="0" />
-            </Field>
-            <Field label="Maximum Score (0-100)" hint="Maximum lead score">
-              <Input type="number" value={form.filter_max_score} onChange={v => setForm(f => ({ ...f, filter_max_score: v }))} placeholder="100" />
             </Field>
           </div>
         </div>

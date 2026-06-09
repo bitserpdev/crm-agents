@@ -35,6 +35,33 @@ export const getCrmContacts = (params) => API.get("/api/crm/contacts", { params 
 export const getCrmLeads    = (params) => API.get("/api/crm/leads",    { params });
 export const getCrmContact  = (id)     => API.get(`/api/crm/contacts/${id}`);
 
+export const uploadContactsCSV = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await axios.post(
+    `${import.meta.env.VITE_API_URL}/api/crm/contacts/upload-csv`,
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }
+  );
+  
+  return response;
+};
+
+export const getCampaignContacts = async (campaignId, limit = 50, offset = 0) => {
+  const response = await axios.get(
+    `${import.meta.env.VITE_API_URL}/api/crm/campaign/${campaignId}/contacts`,
+    {
+      params: { limit, offset }
+    }
+  );
+  return response;
+};
+
 // Agent 3 — Email Campaigns
 export const getEmailCampaigns    = ()        => API.get("/api/crm/email-campaigns");
 export const createEmailCampaign  = (data)    => API.post("/api/crm/email-campaigns", data);

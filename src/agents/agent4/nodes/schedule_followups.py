@@ -113,7 +113,7 @@ def schedule_followups_node(state: Agent4State) -> Agent4State:
         contact = state["contact"]
         cur.execute(
             """
-            INSERT INTO crm.crm_zoom_meetings
+            INSERT INTO crm.crm_teams_meetings
                 (sequence_id, contact_id, campaign_id, join_url, subject, scheduled_at)
             VALUES (%s, %s, %s, %s, %s, NOW())
             ON CONFLICT DO NOTHING

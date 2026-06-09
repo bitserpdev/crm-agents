@@ -1,16 +1,6 @@
 from agents.agent4.state import Agent4State
 from services.email import EmailMessage, email_service
-
-
-def _build_html(body: str) -> str:
-    return (
-        '<html><body style="font-family:Arial,sans-serif;font-size:14px;'
-        'color:#333;max-width:600px;margin:0 auto;padding:20px;">'
-        f"<p>{body.replace(chr(10), '<br>')}</p>"
-        '<hr style="border:none;border-top:1px solid #eee;margin:20px 0;">'
-        '<p style="font-size:12px;color:#999;">BITS Global Consulting | erp@bitsglobalconsulting.com</p>'
-        "</body></html>"
-    )
+from utils.email_format import format_context_from_contact, format_email_body
 
 
 def send_email_node(state: Agent4State) -> Agent4State:
@@ -30,7 +20,7 @@ def send_email_node(state: Agent4State) -> Agent4State:
 
     body = state.get("reply_body", "")
 
-    # Resolve [ZOOM_LINK] placeholder before sending
+    # Resolve [ZOOM_LINK] placeholder before formatting
     if "[ZOOM_LINK]" in body:
         zoom_url = (
             state.get("teams_meeting_url")
@@ -38,14 +28,17 @@ def send_email_node(state: Agent4State) -> Agent4State:
             or ""
         )
         body = body.replace("[ZOOM_LINK]", zoom_url)
-        state["reply_body"] = body
+
+    ctx = format_context_from_contact(state.get("contact", {}))
+    body_text, body_html = format_email_body(body, ctx)
+    state["reply_body"] = body_text
 
     success = email_service.send(
         EmailMessage(
             to=to_email,
             subject=state.get("reply_subject", "Following up"),
-            body_text=body,
-            body_html=_build_html(body),
+            body_text=body_text,
+            body_html=body_html,
         )
     )
 

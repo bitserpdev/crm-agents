@@ -106,7 +106,7 @@ def start():
     scheduler.add_job(
         _monitor_campaign_replies,
         "interval",
-        seconds=20,
+        seconds=100000,
         id="agent3_reply_monitor",
         max_instances=1,
         coalesce=True,

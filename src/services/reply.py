@@ -10,7 +10,11 @@ class ReplyService:
         logger.info("[reply] Agent 4 worker starting")
         try:
             from agents.agent4.graph import run_agent4
+            from agents.agent4.queue import normalize_reply_queue
             r     = get_redis()
+            remaining = normalize_reply_queue(r)
+            if remaining:
+                logger.info("[reply] Reply queue normalized", pending=remaining)
             count = 0
             while r.llen("op:reply_queue") > 0:
                 result = run_agent4()

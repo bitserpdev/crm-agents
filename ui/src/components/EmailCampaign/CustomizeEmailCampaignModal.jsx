@@ -35,9 +35,19 @@ export default function CustomizeEmailCampaignModal({ isOpen, onClose, emailTemp
           <Input value={template.subject} onChange={v => setTemplate({ ...template, subject: v })} placeholder="Email subject" />
         </Field>
 
-        <Field label="Email Body" hint="Edit the email content (HTML supported)">
-          <Input value={template.body} onChange={v => setTemplate({ ...template, body: v })} placeholder="Email body" rows={10} />
+        <Field label="Email Body" hint="Paragraphs are separated by a blank line">
+          <Input value={template.body} onChange={v => setTemplate({ ...template, body: v })} placeholder="Email body" rows={12} />
         </Field>
+
+        {template.htmlBody && (
+          <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <p className="text-xs text-gray-500 mb-2">Preview</p>
+            <div
+              className="text-sm text-gray-200 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: template.htmlBody }}
+            />
+          </div>
+        )}
 
         <div className="flex gap-3 pt-2">
           <button onClick={handleSave} className="flex-1 bg-indigo-600 hover:bg-indigo-500 py-2.5 rounded-lg text-sm font-medium transition-colors">

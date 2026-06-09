@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from core.database import get_conn
 from agents.agent4.state import Agent4State
 from utils.zoom_meeting import create_zoom_meeting
+from utils.email_reply import has_proposed_meeting_time, strip_quoted_reply
 
 
 def create_meeting_node(state: Agent4State) -> Agent4State:
@@ -13,8 +14,16 @@ def create_meeting_node(state: Agent4State) -> Agent4State:
     if state.get("call_situation") != "send_zoom":
         return state
 
+    reply_body = strip_quoted_reply(
+        (state.get("response") or {}).get("reply_body", "")
+    )
+    if not has_proposed_meeting_time(reply_body):
+        print("[agent4/meeting] Skipped — reply has no confirmed date/time")
+        return state
+
     # Reuse existing URL if already scheduled
-    existing_url = (state.get("sequence") or {}).get("zoom_meeting_url")
+    sequence = state.get("sequence") or {}
+    existing_url = sequence.get("teams_meeting_url") or sequence.get("zoom_meeting_url")
     if existing_url:
         state["teams_meeting_url"] = existing_url
         return state
@@ -42,9 +51,9 @@ def create_meeting_node(state: Agent4State) -> Agent4State:
 
         cur.execute(
             """
-            INSERT INTO crm.crm_zoom_meetings
+            INSERT INTO crm.crm_teams_meetings
                 (meeting_id, sequence_id, contact_id, campaign_id,
-                 zoom_meeting_id, join_url, subject, scheduled_at, created_at)
+                 teams_meeting_id, join_url, subject, scheduled_at, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT DO NOTHING
             """,
@@ -64,7 +73,7 @@ def create_meeting_node(state: Agent4State) -> Agent4State:
             cur.execute(
                 """
                 UPDATE crm.crm_follow_up_sequences
-                SET zoom_meeting_url = %s, status = 'call_scheduled', updated_at = NOW()
+                SET teams_meeting_url = %s, status = 'call_scheduled', updated_at = NOW()
                 WHERE sequence_id = %s
                 """,
                 (join_url, sequence_id),

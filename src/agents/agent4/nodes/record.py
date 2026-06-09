@@ -63,7 +63,7 @@ def record_node(state: Agent4State) -> Agent4State:
             ),
         )
 
-    # Mark response as processed — prevents re-processing
+    # Mark done — keep queued_for_agent4 TRUE so monitor does not re-queue endlessly
     cur.execute(
         "UPDATE crm.crm_campaign_responses SET queued_for_agent4 = TRUE WHERE response_id = %s",
         (state["response_id"],),

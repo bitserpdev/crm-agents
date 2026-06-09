@@ -14,7 +14,7 @@ class Agent4State(TypedDict):
     reply_subject:     str
     reply_body:        str
     call_situation:    str
-    teams_meeting_url: Optional[str]
+    zoom_meeting_url: Optional[str]
     sent:              bool
     run_status:        str
     errors:            list

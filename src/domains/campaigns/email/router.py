@@ -6,6 +6,7 @@ from .model import (
     DeleteResponse, SendCustomizedEmailRequest,
 )
 from .service import service
+from fastapi import BackgroundTasks
 
 router = APIRouter()
 
@@ -31,8 +32,8 @@ def send_customized(request: SendCustomizedEmailRequest):
 
 
 @router.post("/{campaign_id}/preview/start")
-def start_preview(campaign_id: str, contact_id: Optional[str] = None):
-    return service.start_preview(campaign_id, contact_id)
+def start_preview(campaign_id: str, background_tasks: BackgroundTasks, contact_id: Optional[str] = None):
+    return service.start_preview(campaign_id, background_tasks, contact_id)
 
 
 @router.get("/preview/job/{job_id}")
@@ -55,3 +56,7 @@ def track_open(recipient_id: str):
     service.track_open(recipient_id)
     pixel = b"\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00\x21\xf9\x04\x00\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b"
     return Response(content=pixel, media_type="image/gif")
+
+@router.post("/{campaign_id}/preview-contacts")
+def preview_contacts(campaign_id: str):
+    return service.preview_contacts(campaign_id)

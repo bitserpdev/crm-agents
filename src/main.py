@@ -39,15 +39,17 @@ setup_exception_handlers(app)
 # ── Domain routers ────────────────────────────────────────────────────────────
 from domains.campaigns.router import router as campaigns_router
 from domains.connectors.router import router as connectors_router
-from domains.ingestion.router     import router as raw_data_router
+from domains.ingestion.router import router as raw_data_router
 from domains.crm.router import router as crm_router
 from domains.upwork.router import router as upwork_router
+from domains.zoom.router import router as zoom_router
 
 app.include_router(campaigns_router, prefix="/api/campaigns", tags=["Campaigns"])
 app.include_router(connectors_router, prefix="/api/connectors", tags=["Connectors"])
-app.include_router(raw_data_router,     prefix="/api/data",     tags=["Raw Data"])
-app.include_router(crm_router,  prefix="/api/crm",  tags=["CRM"])
-app.include_router(upwork_router, prefix="/api/upwork",  tags=["Upwork"])
+app.include_router(raw_data_router, prefix="/api/data", tags=["Raw Data"])
+app.include_router(crm_router, prefix="/api/crm", tags=["CRM"])
+app.include_router(upwork_router, prefix="/api/upwork", tags=["Upwork"])
+app.include_router(zoom_router, prefix="/api/zoom")
 
 
 # ── System routes ─────────────────────────────────────────────────────────────
@@ -82,3 +84,19 @@ def health():
 @app.get("/", tags=["System"])
 def root():
     return {"message": "BITS CRM Agent API", "docs": "/docs"}
+
+
+@app.post("/dev/run-agent3")
+def run_agent3_manual(campaign_id: str):
+    from agents.agent3.nodes.moniter import monitor_replies
+
+    monitor_replies(campaign_id)
+    return {"status": "done"}
+
+
+@app.post("/dev/run-agent4")
+def run_agent4():
+    from services.reply import reply_service
+
+    reply_service.run_agent4_worker()
+    return {"status": "done"}
